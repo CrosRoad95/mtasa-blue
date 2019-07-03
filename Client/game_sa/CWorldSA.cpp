@@ -72,15 +72,93 @@ bool CWorldSA::ResetSurfaceInfo(short sSurfaceID)
 
 void HOOK_FallenPeds();
 void HOOK_FallenCars();
+void HOOK_GetColModel();
 
 void CWorldSA::InstallHooks()
 {
     HookInstall(0x565CB0, (DWORD)HOOK_FallenPeds, 5);
     HookInstall(0x565E80, (DWORD)HOOK_FallenCars, 5);
+    HookInstall(0x535300, (DWORD)HOOK_GetColModel, 5);
 }
 
 DWORD CONTINUE_CWorld_FallenPeds = 0x00565CBA;
 DWORD CONTINUE_CWorld_FallenCars = 0x00565E8A;
+DWORD CONTINUE_CWorld_GetColModel = 0x00535305;
+
+bool        bIsObject = false;
+CColModelSAInterface* colModel;
+CObject*    pObject;
+
+void GetColModel(CEntitySAInterface* pEntity)
+{
+    bIsObject = false;
+    if (pEntity->nType == ENTITY_TYPE_OBJECT)
+    {
+        // g_pCore->GetConsole()->Printf("Model %i", pEntity->m_nModelIndex);
+        CObjectSAInterface* pInterface = static_cast<CObjectSAInterface*>(pEntity);
+
+        SClientEntity<CObjectSA>* pObjectClientEntity = g_pCore->GetGame()->GetPools()->GetObjectA((DWORD*)pInterface);
+        pObject = pObjectClientEntity ? pObjectClientEntity->pEntity : nullptr;
+        if (pObject != nullptr)
+        {
+            bIsObject = true;
+        }
+    }
+}
+
+    using CColModel_AllocateData_t = CColModelSAInterface*(__cdecl*)(int numSpheres, int numBoxes, int num1, int numMeshVertices, int numFaces, int fl);
+auto CColModel_AllocateData = (CColModel_AllocateData_t)0x0040F870;
+
+    
+CColModelSAInterface* CopyScaled(CColModelSAInterface* colModel)
+{
+    CColDataSA*           colData = colModel->pColData;
+    size_t                verticesCount = colData->getNumVertices();
+    CColModelSAInterface* copied =
+        //CColModel_AllocateData(3,0,0,0,0, false);
+        CColModel_AllocateData(colData->numColSpheres, colData->numColBoxes, 0, verticesCount, colData->numColTriangles, 0);
+    return colModel;
+}
+
+
+CColModelSAInterface* DoSomethingWithCollision(CObject* pObject)
+{
+    CModelInfoSA* pModelInfoSA = (CModelInfoSA*)(pGame->GetModelInfo(pObject->GetModelIndex()));
+    // CModelInfoSA* pModelInfoSA = (CModelInfoSA*)(pGame->GetModelInfo(1337));
+    CColModelSAInterface* pOriginal = CopyScaled(pModelInfoSA->GetInterface()->pColModel);
+    return pOriginal;
+}
+
+void _declspec(naked) HOOK_GetColModel()
+{
+    _asm
+    {
+        pushad
+        push    ecx
+        call    GetColModel
+        mov     colModel, eax
+        add     esp, 4
+        popad
+    }
+
+    if (bIsObject)
+    {
+        colModel = DoSomethingWithCollision(pObject);
+        _asm
+        {
+            mov eax, colModel
+            retn
+        }
+    }
+    else
+    {
+        _asm {
+        mov al, [ecx + 36h]
+        and al, 7 
+        jmp CONTINUE_CWorld_GetColModel
+        }
+    }
+}
 
 void _declspec(naked) HOOK_FallenPeds()
 {

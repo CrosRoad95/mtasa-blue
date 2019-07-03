@@ -71,6 +71,18 @@ typedef struct
     void*                pUnknown;
     CColTriangleSA*      pColTriangles;
     CColTrianglePlaneSA* pColTrianglePlanes;
+
+    size_t getNumVertices() const
+    {
+        std::map<ushort, bool> vertices;
+        for (uint i = 0; numColTriangles > i; i++)
+        {
+            vertices[pColTriangles[i].v1] = true;
+            vertices[pColTriangles[i].v2] = true;
+            vertices[pColTriangles[i].v3] = true;
+        }
+        return vertices.size();
+    }
 } CColDataSA;
 
 class CColModelSAInterface
