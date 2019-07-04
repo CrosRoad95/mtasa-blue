@@ -331,8 +331,43 @@ CColModelSAInterface* GetScaled(WORD model, CColModelSAInterface* colModel, CVec
     return colModel;
 }
 
+int  k = 0;
+
+void DrawCollisionDebug(CObject* pObject)
+{
+    k++;
+    //g_pCore->GetConsole()->Printf("k %i", k);
+    CModelInfoSA*         pModelInfoSA = (CModelInfoSA*)(pGame->GetModelInfo(pObject->GetModelIndex()));
+    CColModelSAInterface* colModel = pModelInfoSA->GetInterface()->pColModel;
+    if (colModel->pColData == nullptr)
+        return;
+
+    CVector* scale = pObject->GetScale();
+    CVector  vecPosition = *pObject->GetPosition();
+
+    CVector bboxMin = colModel->boundingBox.vecMin;
+    CVector bboxMax = colModel->boundingBox.vecMax;
+    unsigned int color = (unsigned int)colModel;            // make color depends on collision
+    //g_pCore->GetGraphics()->DrawLine3DQueued(vecPosition - bboxMin, vecPosition + bboxMax, 10, (unsigned int)colModel,false);
+
+    CColTriangleSA* pColTriangle;
+    CVector           trianglePosition[3];
+    for(int i=0; i<colModel->pColData->numColTriangles; i++)
+    {
+        pColTriangle = &colModel->pColData->pColTriangles[i];
+        trianglePosition[0] = colModel->pColData->pVertices[pColTriangle->v1].getVector() + vecPosition;
+        trianglePosition[1] = colModel->pColData->pVertices[pColTriangle->v2].getVector() + vecPosition;
+        trianglePosition[2] = colModel->pColData->pVertices[pColTriangle->v3].getVector() + vecPosition;
+        g_pCore->GetGraphics()->DrawLine3DQueued(trianglePosition[0], trianglePosition[1], 10, color, false);
+        g_pCore->GetGraphics()->DrawLine3DQueued(trianglePosition[0], trianglePosition[2], 10, color, false);
+        g_pCore->GetGraphics()->DrawLine3DQueued(trianglePosition[2], trianglePosition[3], 10, color, false);
+    }
+    //CColModelSAInterface* pCol = GetScaled(pObject->GetModelIndex(), pModelInfoSA->GetInterface()->pColModel, scale);
+}
+
 CColModelSAInterface* DoSomethingWithCollision(CObject* pObject)
 {
+    DrawCollisionDebug(pObject);
     CModelInfoSA* pModelInfoSA = (CModelInfoSA*)(pGame->GetModelInfo(pObject->GetModelIndex()));
     CVector*      scale = pObject->GetScale();
 
