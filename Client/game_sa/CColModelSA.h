@@ -14,28 +14,44 @@
 #include <windows.h>
 #include <game/CColModel.h>
 
-#define FUNC_CColModel_Constructor      0x40FB60
-#define FUNC_CColModel_Destructor       0x40F700
+#define FUNC_CColModel_Constructor 0x40FB60
+#define FUNC_CColModel_Destructor 0x40F700
 
 typedef struct
 {
     CVector vecMin;
     CVector vecMax;
     CVector vecOffset;
-    FLOAT   fRadius;
+    float   fRadius;
 } CBoundingBoxSA;
 
-typedef struct
+struct CColSphereSA
 {
-    CVector vecCenter;
-    float   fRadius;
-} CColSphereSA;
+    CVector      vecCenter;
+    float        fRadius;
+    uchar        material;
+    uchar        flags;
+    CColLighting lighting;
+    uchar        light;
+    CColSphereSA(CVector vecCenter, float fRadius, uchar material, uchar flags, CColLighting lighting, uchar light)
+        : vecCenter(vecCenter), fRadius(fRadius), material(material), flags(flags), lighting(lighting), light(light)
+    {
+    }
+};
 
-typedef struct
+struct CColBoxSA
 {
-    CVector min;
-    CVector max;
-} CColBoxSA;
+    CVector      min;
+    CVector      max;
+    uchar        material;
+    uchar        flags;
+    CColLighting lighting;
+    uchar        light;
+    CColBoxSA(CVector min, CVector max, uchar material, uchar flags, CColLighting lighting, uchar light)
+        : min(min), max(max), material(material), flags(flags), lighting(lighting), light(light)
+    {
+    }
+};
 
 typedef struct
 {
@@ -58,6 +74,21 @@ typedef struct
     char  name[0x18];
 } ColModelFileHeader;
 
+struct CompressedVector
+{
+    signed __int16 x;
+    signed __int16 y;
+    signed __int16 z;
+    CVector        getVector() const { return CVector(x * 0.0078125f, y * 0.0078125f, z * 0.0078125f); }
+    void           setVector(CVector vec)
+    {
+        x = static_cast<signed __int16>(vec.fX * 128);
+        y = static_cast<signed __int16>(vec.fY * 128);
+        z = static_cast<signed __int16>(vec.fZ * 128);
+    }
+    CompressedVector(signed __int16 x, signed __int16 y, signed __int16 z) : x(x), y(y), z(z) {}
+};
+
 typedef struct
 {
     WORD                 numColSpheres;
@@ -68,7 +99,7 @@ typedef struct
     CColSphereSA*        pColSpheres;
     CColBoxSA*           pColBoxes;
     void*                pSuspensionLines;
-    void*                pUnknown;
+    CompressedVector*    pVertices;
     CColTriangleSA*      pColTriangles;
     CColTrianglePlaneSA* pColTrianglePlanes;
 

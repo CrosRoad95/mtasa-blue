@@ -85,9 +85,9 @@ DWORD CONTINUE_CWorld_FallenPeds = 0x00565CBA;
 DWORD CONTINUE_CWorld_FallenCars = 0x00565E8A;
 DWORD CONTINUE_CWorld_GetColModel = 0x00535305;
 
-bool        bIsObject = false;
+bool                  bIsObject = false;
 CColModelSAInterface* colModel;
-CObject*    pObject;
+CObject*              pObject;
 
 void GetColModel(CEntitySAInterface* pEntity)
 {
@@ -106,27 +106,238 @@ void GetColModel(CEntitySAInterface* pEntity)
     }
 }
 
-    using CColModel_AllocateData_t = CColModelSAInterface*(__cdecl*)(int numSpheres, int numBoxes, int num1, int numMeshVertices, int numFaces, int fl);
-auto CColModel_AllocateData = (CColModel_AllocateData_t)0x0040F870;
-
-    
-CColModelSAInterface* CopyScaled(CColModelSAInterface* colModel)
+class OriginalCollisions
 {
-    CColDataSA*           colData = colModel->pColData;
-    size_t                verticesCount = colData->getNumVertices();
-    CColModelSAInterface* copied =
-        //CColModel_AllocateData(3,0,0,0,0, false);
-        CColModel_AllocateData(colData->numColSpheres, colData->numColBoxes, 0, verticesCount, colData->numColTriangles, 0);
-    return colModel;
+public:
+    std::vector<CColSphereSA*>     spheres;
+    std::vector<CColBoxSA*>        boxes;
+    std::vector<CompressedVector*> vertices;
+    CBoundingBoxSA                 boundingBox;
+};
+
+class ScaledCollision
+{
+public:
+    CVector*                       scale;
+    std::vector<CColSphereSA*>     spheres;
+    std::vector<CColBoxSA*>        boxes;
+    std::vector<CompressedVector*> vertices;
+    CBoundingBoxSA                 boundingBox;
+};
+
+std::map<WORD, std::vector<ScaledCollision*>> scaledCollisions = std::map<WORD, std::vector<ScaledCollision*>>();
+std::map<WORD, OriginalCollisions*>           originalCollisions = std::map<WORD, OriginalCollisions*>();
+
+void SaveOriginalCollisionIfDoesNotExists(WORD model, CColModelSAInterface* colModel)
+{
+    auto origCol = originalCollisions.find(model);
+
+    if (origCol == originalCollisions.end())
+    {
+        CColDataSA* colData = colModel->pColData;
+        if (colData == nullptr)
+            return;
+
+        OriginalCollisions* original = new OriginalCollisions();
+        size_t              numVertices = colData->getNumVertices();
+
+        original->spheres = std::vector<CColSphereSA*>();
+        original->boxes = std::vector<CColBoxSA*>();
+        original->vertices = std::vector<CompressedVector*>();
+
+        memcpy(&original->boundingBox, &colModel->boundingBox, sizeof(CBoundingBoxSA));
+
+        original->spheres.reserve(colData->numColSpheres);
+        original->boxes.reserve(colData->numColBoxes);
+        original->vertices.reserve(numVertices);
+
+        CColSphereSA*     sphere = 0;
+        CColBoxSA*        box = 0;
+        CompressedVector* vertex = 0;
+
+        for (int i = 0; i < colData->numColSpheres; i++)
+        {
+            sphere = &colData->pColSpheres[i];
+            original->spheres.emplace_back(new CColSphereSA(CVector(sphere->vecCenter.fX, sphere->vecCenter.fY, sphere->vecCenter.fZ), sphere->fRadius,
+                                                            sphere->material, sphere->flags, sphere->lighting, sphere->light));
+        }
+
+        for (int i = 0; i < colData->numColBoxes; i++)
+        {
+            box = &colData->pColBoxes[i];
+            original->boxes.emplace_back(new CColBoxSA(CVector(box->min.fX, box->min.fY, box->min.fZ), CVector(box->max.fX, box->max.fY, box->max.fZ),
+                                                       box->material, box->flags, box->lighting, box->light));
+        }
+
+        for (int i = 0; i < numVertices; i++)
+        {
+            vertex = &colData->pVertices[i];
+            original->vertices.emplace_back(new CompressedVector(vertex->x, vertex->y, vertex->z));
+        }
+
+        originalCollisions[model] = original;
+    }
 }
 
+ScaledCollision* GetScaledCollision(WORD model, CVector* targetScale)
+{
+    OriginalCollisions* original = originalCollisions[model];
+    auto                scaledCols = scaledCollisions.find(model);
+
+    std::vector<ScaledCollision*> vecScaledCollisions;
+
+    // if this model doesn't get scaled
+    if (scaledCols == scaledCollisions.end())
+    {
+        vecScaledCollisions = std::vector<ScaledCollision*>();
+
+        scaledCollisions[model] = vecScaledCollisions;
+    }
+
+    vecScaledCollisions = scaledCollisions[model];
+    for (ScaledCollision* scaledCollision : vecScaledCollisions)
+    {
+        if (scaledCollision->scale->fX == targetScale->fX && scaledCollision->scale->fY == targetScale->fY && scaledCollision->scale->fZ == targetScale->fZ)
+        {
+            return scaledCollision;
+        }
+    }
+
+    // scale for this wasn't used yet, so create it
+
+    ScaledCollision* scaledCollision = new ScaledCollision();
+    scaledCollisions[model].push_back(scaledCollision);
+    scaledCollision->scale = targetScale;
+    /////////////////////
+
+    scaledCollision->spheres = std::vector<CColSphereSA*>();
+    scaledCollision->boxes = std::vector<CColBoxSA*>();
+    scaledCollision->vertices = std::vector<CompressedVector*>();
+
+    scaledCollision->spheres.reserve(original->spheres.size());
+    scaledCollision->boxes.reserve(original->boxes.size());
+    scaledCollision->vertices.reserve(original->vertices.size());
+
+    CColSphereSA*     sphere = 0;
+    CColBoxSA*        box = 0;
+    CompressedVector* vertex = 0;
+
+    for (int i = 0; i < original->spheres.size(); i++)
+    {
+        sphere = original->spheres[i];
+        scaledCollision->spheres.emplace_back(new CColSphereSA(CVector(sphere->vecCenter.fX, sphere->vecCenter.fY, sphere->vecCenter.fZ), sphere->fRadius,
+                                                               sphere->material, sphere->flags, sphere->lighting, sphere->light));
+    }
+
+    for (int i = 0; i < original->boxes.size(); i++)
+    {
+        box = original->boxes[i];
+        scaledCollision->boxes.emplace_back(new CColBoxSA(CVector(box->min.fX, box->min.fY, box->min.fZ), CVector(box->max.fX, box->max.fY, box->max.fZ),
+                                                          box->material, box->flags, box->lighting, box->light));
+    }
+
+    for (int i = 0; i < original->vertices.size(); i++)
+    {
+        vertex = original->vertices[i];
+        scaledCollision->vertices.emplace_back(new CompressedVector(vertex->x, vertex->y, vertex->z));
+    }
+
+    ////////////////////////////
+
+    memcpy(&scaledCollision->boundingBox, &original->boundingBox, sizeof(CBoundingBoxSA));
+
+    scaledCollision->boundingBox.fRadius *= std::max(targetScale->fX, std::max(targetScale->fY, targetScale->fZ));
+    scaledCollision->boundingBox.vecMax *= *targetScale;
+    scaledCollision->boundingBox.vecMin *= *targetScale;
+
+    CColSphereSA*     sphereOriginal;
+    CColBoxSA*        boxOriginal;
+    CompressedVector* vertexOriginal;
+
+    for (int i = 0; i < scaledCollision->spheres.size(); i++)
+    {
+        sphereOriginal = original->spheres[i];
+        scaledCollision->spheres[i]->fRadius *= targetScale->fX;
+        scaledCollision->spheres[i]->vecCenter *= *targetScale;
+    }
+
+    for (int i = 0; i < scaledCollision->boxes.size(); i++)
+    {
+        boxOriginal = original->boxes[i];
+        scaledCollision->boxes[i]->max *= *targetScale;
+        scaledCollision->boxes[i]->min *= *targetScale;
+    }
+    for (int i = 0; i < scaledCollision->vertices.size(); i++)
+    {
+        vertexOriginal = original->vertices[i];
+        scaledCollision->vertices[i]->x *= targetScale->fX;
+        scaledCollision->vertices[i]->y *= targetScale->fY;
+        scaledCollision->vertices[i]->z *= targetScale->fZ;
+    }
+
+    return scaledCollision;
+}
+
+CColModelSAInterface* GetScaled(WORD model, CColModelSAInterface* colModel, CVector* scale)
+{
+    if (colModel->pColData == nullptr)
+        return colModel;
+
+    SaveOriginalCollisionIfDoesNotExists(model, colModel);
+
+    auto origCol = originalCollisions.find(model);
+
+    if (origCol == originalCollisions.end())
+        return colModel;
+
+    if (scale->fX == 1 && scale->fY == 1 && scale->fZ == 1)
+    {
+        OriginalCollisions* original = originalCollisions[model];
+        if (colModel->pColData->pColSpheres != nullptr)
+            colModel->pColData->pColSpheres = *(original->spheres.data());
+        if (colModel->pColData->pColBoxes != nullptr)
+            colModel->pColData->pColBoxes = *(original->boxes.data());
+        if (colModel->pColData->pVertices != nullptr)
+            colModel->pColData->pVertices = *(original->vertices.data());
+
+        colModel->boundingBox = original->boundingBox;
+    }
+    else
+    {
+        ScaledCollision* col = GetScaledCollision(model, scale);
+        if (colModel->pColData->pColSpheres != nullptr)
+            colModel->pColData->pColSpheres = *(col->spheres.data());
+        if (colModel->pColData->pColBoxes != nullptr)
+            colModel->pColData->pColBoxes = *(col->boxes.data());
+        if (colModel->pColData->pVertices != nullptr)
+            colModel->pColData->pVertices = *(col->vertices.data());
+
+        colModel->boundingBox = col->boundingBox;
+    }
+    /*
+    CColDataSA*           colData = colModel->pColData;
+    size_t                verticesCount = colData->getNumVertices();
+
+    CColSphereSA sphere;
+    for (int i = 0; i < colData->numColSpheres; i++)
+    {
+        sphere = colData->pColSpheres[i];
+        sphere.fRadius *= scale->fX;
+        sphere.vecCenter.fX *= scale->fX;
+        sphere.vecCenter.fY *= scale->fY;
+        sphere.vecCenter.fZ *= scale->fZ;
+    }
+    */
+    return colModel;
+}
 
 CColModelSAInterface* DoSomethingWithCollision(CObject* pObject)
 {
     CModelInfoSA* pModelInfoSA = (CModelInfoSA*)(pGame->GetModelInfo(pObject->GetModelIndex()));
-    // CModelInfoSA* pModelInfoSA = (CModelInfoSA*)(pGame->GetModelInfo(1337));
-    CColModelSAInterface* pOriginal = CopyScaled(pModelInfoSA->GetInterface()->pColModel);
-    return pOriginal;
+    CVector*      scale = pObject->GetScale();
+
+    CColModelSAInterface* pCol = GetScaled(pObject->GetModelIndex(), pModelInfoSA->GetInterface()->pColModel, scale);
+    return pCol;
 }
 
 void _declspec(naked) HOOK_GetColModel()
