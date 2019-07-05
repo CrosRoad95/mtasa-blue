@@ -27,16 +27,14 @@ typedef struct
 
 struct CColSphereSA
 {
-    CVector      vecCenter;
     float        fRadius;
+    CVector      vecCenter;
     uchar        material;
     uchar        flags;
-    CColLighting lighting;
+    uchar        lighting;
     uchar        light;
-    CColSphereSA(CVector vecCenter, float fRadius, uchar material, uchar flags, CColLighting lighting, uchar light)
-        : vecCenter(vecCenter), fRadius(fRadius), material(material), flags(flags), lighting(lighting), light(light)
-    {
-    }
+
+    CColSphereSA() {}
 };
 
 struct CColBoxSA
@@ -47,10 +45,8 @@ struct CColBoxSA
     uchar        flags;
     CColLighting lighting;
     uchar        light;
-    CColBoxSA(CVector min, CVector max, uchar material, uchar flags, CColLighting lighting, uchar light)
-        : min(min), max(max), material(material), flags(flags), lighting(lighting), light(light)
-    {
-    }
+
+    CColBoxSA(){}
 };
 
 typedef struct
@@ -86,7 +82,7 @@ struct CompressedVector
         y = static_cast<signed __int16>(vec.fY * 128);
         z = static_cast<signed __int16>(vec.fZ * 128);
     }
-    CompressedVector(signed __int16 x, signed __int16 y, signed __int16 z) : x(x), y(y), z(z) {}
+    CompressedVector() {}
 };
 
 typedef struct
@@ -103,16 +99,16 @@ typedef struct
     CColTriangleSA*      pColTriangles;
     CColTrianglePlaneSA* pColTrianglePlanes;
 
-    size_t getNumVertices() const
+    ushort getNumVertices() const
     {
-        std::map<ushort, bool> vertices;
+        ushort count = 0;
+        CColTriangleSA triangle;
         for (uint i = 0; numColTriangles > i; i++)
         {
-            vertices[pColTriangles[i].v1] = true;
-            vertices[pColTriangles[i].v2] = true;
-            vertices[pColTriangles[i].v3] = true;
+            triangle = pColTriangles[i];
+            count = std::max(count, std::max(triangle.v1, std::max(triangle.v2, triangle.v3)));
         }
-        return vertices.size();
+        return count + 1;
     }
 } CColDataSA;
 

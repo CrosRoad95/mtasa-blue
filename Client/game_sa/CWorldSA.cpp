@@ -109,20 +109,26 @@ void GetColModel(CEntitySAInterface* pEntity)
 class OriginalCollisions
 {
 public:
-    std::vector<CColSphereSA*>     spheres;
-    std::vector<CColBoxSA*>        boxes;
-    std::vector<CompressedVector*> vertices;
-    CBoundingBoxSA                 boundingBox;
+    CColSphereSA*     spheres;
+    CColBoxSA*        boxes;
+    CompressedVector* vertices;
+    ushort            spheresCount;
+    ushort            boxesCount;
+    ushort            verticesCount;
+    CBoundingBoxSA    boundingBox;
 };
 
-class ScaledCollision
+class ScaledCollision : OriginalCollisions
 {
 public:
-    CVector*                       scale;
-    std::vector<CColSphereSA*>     spheres;
-    std::vector<CColBoxSA*>        boxes;
-    std::vector<CompressedVector*> vertices;
-    CBoundingBoxSA                 boundingBox;
+    CVector*          scale;
+    CColSphereSA*     spheres;
+    CColBoxSA*        boxes;
+    CompressedVector* vertices;
+    ushort            spheresCount;
+    ushort            boxesCount;
+    ushort            verticesCount;
+    CBoundingBoxSA    boundingBox;
 };
 
 std::map<WORD, std::vector<ScaledCollision*>> scaledCollisions = std::map<WORD, std::vector<ScaledCollision*>>();
@@ -139,41 +145,26 @@ void SaveOriginalCollisionIfDoesNotExists(WORD model, CColModelSAInterface* colM
             return;
 
         OriginalCollisions* original = new OriginalCollisions();
-        size_t              numVertices = colData->getNumVertices();
+        ushort              verticesCount = colData->getNumVertices();
 
-        original->spheres = std::vector<CColSphereSA*>();
-        original->boxes = std::vector<CColBoxSA*>();
-        original->vertices = std::vector<CompressedVector*>();
+        original->spheresCount = colData->numColSpheres;
+        original->boxesCount = colData->numColBoxes;
+        original->verticesCount = verticesCount;
+
+        original->spheres = new CColSphereSA[original->spheresCount]{};
+        original->boxes = new CColBoxSA[original->boxesCount]{};
+        original->vertices = new CompressedVector[original->verticesCount]{};
 
         memcpy(&original->boundingBox, &colModel->boundingBox, sizeof(CBoundingBoxSA));
 
-        original->spheres.reserve(colData->numColSpheres);
-        original->boxes.reserve(colData->numColBoxes);
-        original->vertices.reserve(numVertices);
+        for (int i = 0; i < original->spheresCount; i++)
+            original->spheres[i] = colData->pColSpheres[i];
 
-        CColSphereSA*     sphere = 0;
-        CColBoxSA*        box = 0;
-        CompressedVector* vertex = 0;
+        for (int i = 0; i < original->boxesCount; i++)
+            original->boxes[i] = colData->pColBoxes[i];
 
-        for (int i = 0; i < colData->numColSpheres; i++)
-        {
-            sphere = &colData->pColSpheres[i];
-            original->spheres.emplace_back(new CColSphereSA(CVector(sphere->vecCenter.fX, sphere->vecCenter.fY, sphere->vecCenter.fZ), sphere->fRadius,
-                                                            sphere->material, sphere->flags, sphere->lighting, sphere->light));
-        }
-
-        for (int i = 0; i < colData->numColBoxes; i++)
-        {
-            box = &colData->pColBoxes[i];
-            original->boxes.emplace_back(new CColBoxSA(CVector(box->min.fX, box->min.fY, box->min.fZ), CVector(box->max.fX, box->max.fY, box->max.fZ),
-                                                       box->material, box->flags, box->lighting, box->light));
-        }
-
-        for (int i = 0; i < numVertices; i++)
-        {
-            vertex = &colData->pVertices[i];
-            original->vertices.emplace_back(new CompressedVector(vertex->x, vertex->y, vertex->z));
-        }
+        for (int i = 0; i < original->verticesCount; i++)
+            original->vertices[i] = colData->pVertices[i];
 
         originalCollisions[model] = original;
     }
@@ -190,7 +181,6 @@ ScaledCollision* GetScaledCollision(WORD model, CVector* targetScale)
     if (scaledCols == scaledCollisions.end())
     {
         vecScaledCollisions = std::vector<ScaledCollision*>();
-
         scaledCollisions[model] = vecScaledCollisions;
     }
 
@@ -209,38 +199,26 @@ ScaledCollision* GetScaledCollision(WORD model, CVector* targetScale)
     scaledCollisions[model].push_back(scaledCollision);
     scaledCollision->scale = targetScale;
     /////////////////////
+    scaledCollision->spheresCount = original->spheresCount;
+    scaledCollision->boxesCount = original->boxesCount;
+    scaledCollision->verticesCount = original->verticesCount;
 
-    scaledCollision->spheres = std::vector<CColSphereSA*>();
-    scaledCollision->boxes = std::vector<CColBoxSA*>();
-    scaledCollision->vertices = std::vector<CompressedVector*>();
+    scaledCollision->spheres = new CColSphereSA[original->spheresCount]{};
+    scaledCollision->boxes = new CColBoxSA[original->boxesCount]{};
+    scaledCollision->vertices = new CompressedVector[original->verticesCount]{};
 
-    scaledCollision->spheres.reserve(original->spheres.size());
-    scaledCollision->boxes.reserve(original->boxes.size());
-    scaledCollision->vertices.reserve(original->vertices.size());
+    memcpy(&scaledCollision->boundingBox, &original->boundingBox, sizeof(CBoundingBoxSA));
 
-    CColSphereSA*     sphere = 0;
-    CColBoxSA*        box = 0;
-    CompressedVector* vertex = 0;
+    for (int i = 0; i < original->spheresCount; i++)
+        scaledCollision->spheres[i] = original->spheres[i];
 
-    for (int i = 0; i < original->spheres.size(); i++)
-    {
-        sphere = original->spheres[i];
-        scaledCollision->spheres.emplace_back(new CColSphereSA(CVector(sphere->vecCenter.fX, sphere->vecCenter.fY, sphere->vecCenter.fZ), sphere->fRadius,
-                                                               sphere->material, sphere->flags, sphere->lighting, sphere->light));
-    }
+    for (int i = 0; i < original->boxesCount; i++)
+        scaledCollision->boxes[i] = original->boxes[i];
 
-    for (int i = 0; i < original->boxes.size(); i++)
-    {
-        box = original->boxes[i];
-        scaledCollision->boxes.emplace_back(new CColBoxSA(CVector(box->min.fX, box->min.fY, box->min.fZ), CVector(box->max.fX, box->max.fY, box->max.fZ),
-                                                          box->material, box->flags, box->lighting, box->light));
-    }
+    for (int i = 0; i < original->verticesCount; i++)
+        scaledCollision->vertices[i] = original->vertices[i];
 
-    for (int i = 0; i < original->vertices.size(); i++)
-    {
-        vertex = original->vertices[i];
-        scaledCollision->vertices.emplace_back(new CompressedVector(vertex->x, vertex->y, vertex->z));
-    }
+
 
     ////////////////////////////
 
@@ -250,29 +228,22 @@ ScaledCollision* GetScaledCollision(WORD model, CVector* targetScale)
     scaledCollision->boundingBox.vecMax *= *targetScale;
     scaledCollision->boundingBox.vecMin *= *targetScale;
 
-    CColSphereSA*     sphereOriginal;
-    CColBoxSA*        boxOriginal;
-    CompressedVector* vertexOriginal;
-
-    for (int i = 0; i < scaledCollision->spheres.size(); i++)
+    for (int i = 0; i < scaledCollision->spheresCount; i++)
     {
-        sphereOriginal = original->spheres[i];
-        scaledCollision->spheres[i]->fRadius *= targetScale->fX;
-        scaledCollision->spheres[i]->vecCenter *= *targetScale;
+        scaledCollision->spheres[i].fRadius *= targetScale->fX;
+        scaledCollision->spheres[i].vecCenter *= *targetScale;
     }
 
-    for (int i = 0; i < scaledCollision->boxes.size(); i++)
+    for (int i = 0; i < scaledCollision->boxesCount; i++)
     {
-        boxOriginal = original->boxes[i];
-        scaledCollision->boxes[i]->max *= *targetScale;
-        scaledCollision->boxes[i]->min *= *targetScale;
+        scaledCollision->boxes[i].max *= *targetScale;
+        scaledCollision->boxes[i].min *= *targetScale;
     }
-    for (int i = 0; i < scaledCollision->vertices.size(); i++)
+    for (int i = 0; i < original->verticesCount; i++)
     {
-        vertexOriginal = original->vertices[i];
-        scaledCollision->vertices[i]->x *= targetScale->fX;
-        scaledCollision->vertices[i]->y *= targetScale->fY;
-        scaledCollision->vertices[i]->z *= targetScale->fZ;
+        scaledCollision->vertices[i].x *= targetScale->fX;
+        scaledCollision->vertices[i].y *= targetScale->fY;
+        scaledCollision->vertices[i].z *= targetScale->fZ;
     }
 
     return scaledCollision;
@@ -294,11 +265,11 @@ CColModelSAInterface* GetScaled(WORD model, CColModelSAInterface* colModel, CVec
     {
         OriginalCollisions* original = originalCollisions[model];
         if (colModel->pColData->pColSpheres != nullptr)
-            colModel->pColData->pColSpheres = *(original->spheres.data());
+            colModel->pColData->pColSpheres = original->spheres;
         if (colModel->pColData->pColBoxes != nullptr)
-            colModel->pColData->pColBoxes = *(original->boxes.data());
+            colModel->pColData->pColBoxes = original->boxes;
         if (colModel->pColData->pVertices != nullptr)
-            colModel->pColData->pVertices = *(original->vertices.data());
+            colModel->pColData->pVertices = original->vertices;
 
         colModel->boundingBox = original->boundingBox;
     }
@@ -306,11 +277,11 @@ CColModelSAInterface* GetScaled(WORD model, CColModelSAInterface* colModel, CVec
     {
         ScaledCollision* col = GetScaledCollision(model, scale);
         if (colModel->pColData->pColSpheres != nullptr)
-            colModel->pColData->pColSpheres = *(col->spheres.data());
+            colModel->pColData->pColSpheres = col->spheres;
         if (colModel->pColData->pColBoxes != nullptr)
-            colModel->pColData->pColBoxes = *(col->boxes.data());
+            colModel->pColData->pColBoxes = col->boxes;
         if (colModel->pColData->pVertices != nullptr)
-            colModel->pColData->pVertices = *(col->vertices.data());
+            colModel->pColData->pVertices = col->vertices;
 
         colModel->boundingBox = col->boundingBox;
     }
@@ -331,12 +302,12 @@ CColModelSAInterface* GetScaled(WORD model, CColModelSAInterface* colModel, CVec
     return colModel;
 }
 
-int  k = 0;
+int k = 0;
 
 void DrawCollisionDebug(CObject* pObject)
 {
     k++;
-    //g_pCore->GetConsole()->Printf("k %i", k);
+    // g_pCore->GetConsole()->Printf("k %i", k);
     CModelInfoSA*         pModelInfoSA = (CModelInfoSA*)(pGame->GetModelInfo(pObject->GetModelIndex()));
     CColModelSAInterface* colModel = pModelInfoSA->GetInterface()->pColModel;
     if (colModel->pColData == nullptr)
@@ -345,24 +316,28 @@ void DrawCollisionDebug(CObject* pObject)
     CVector* scale = pObject->GetScale();
     CVector  vecPosition = *pObject->GetPosition();
 
-    CVector bboxMin = colModel->boundingBox.vecMin;
-    CVector bboxMax = colModel->boundingBox.vecMax;
+    CVector      bboxMin = colModel->boundingBox.vecMin;
+    CVector      bboxMax = colModel->boundingBox.vecMax;
     unsigned int color = (unsigned int)colModel;            // make color depends on collision
-    //g_pCore->GetGraphics()->DrawLine3DQueued(vecPosition - bboxMin, vecPosition + bboxMax, 10, (unsigned int)colModel,false);
+    // g_pCore->GetGraphics()->DrawLine3DQueued(vecPosition - bboxMin, vecPosition + bboxMax, 10, (unsigned int)colModel,false);
 
-    CColTriangleSA* pColTriangle;
+    CColTriangleSA*   pColTriangle;
     CVector           trianglePosition[3];
-    for(int i=0; i<colModel->pColData->numColTriangles; i++)
+    CompressedVector* asdf[3];
+    for (int i = 0; i < colModel->pColData->numColTriangles; i++)
     {
         pColTriangle = &colModel->pColData->pColTriangles[i];
+        asdf[0] = &colModel->pColData->pVertices[pColTriangle->v1];
+        asdf[1] = &colModel->pColData->pVertices[pColTriangle->v2];
+        asdf[2] = &colModel->pColData->pVertices[pColTriangle->v3];
         trianglePosition[0] = colModel->pColData->pVertices[pColTriangle->v1].getVector() + vecPosition;
         trianglePosition[1] = colModel->pColData->pVertices[pColTriangle->v2].getVector() + vecPosition;
         trianglePosition[2] = colModel->pColData->pVertices[pColTriangle->v3].getVector() + vecPosition;
         g_pCore->GetGraphics()->DrawLine3DQueued(trianglePosition[0], trianglePosition[1], 10, color, false);
-        g_pCore->GetGraphics()->DrawLine3DQueued(trianglePosition[0], trianglePosition[2], 10, color, false);
-        g_pCore->GetGraphics()->DrawLine3DQueued(trianglePosition[2], trianglePosition[3], 10, color, false);
+        g_pCore->GetGraphics()->DrawLine3DQueued(trianglePosition[1], trianglePosition[2], 10, color, false);
+        g_pCore->GetGraphics()->DrawLine3DQueued(trianglePosition[2], trianglePosition[0], 10, color, false);
     }
-    //CColModelSAInterface* pCol = GetScaled(pObject->GetModelIndex(), pModelInfoSA->GetInterface()->pColModel, scale);
+    // CColModelSAInterface* pCol = GetScaled(pObject->GetModelIndex(), pModelInfoSA->GetInterface()->pColModel, scale);
 }
 
 CColModelSAInterface* DoSomethingWithCollision(CObject* pObject)
@@ -370,6 +345,9 @@ CColModelSAInterface* DoSomethingWithCollision(CObject* pObject)
     DrawCollisionDebug(pObject);
     CModelInfoSA* pModelInfoSA = (CModelInfoSA*)(pGame->GetModelInfo(pObject->GetModelIndex()));
     CVector*      scale = pObject->GetScale();
+
+    // CColModelSAInterface* pCol = GetScaled(pObject->GetModelIndex(), pModelInfoSA->GetInterface()->pColModel, scale);
+    // return pModelInfoSA->GetInterface()->pColModel;
 
     CColModelSAInterface* pCol = GetScaled(pObject->GetModelIndex(), pModelInfoSA->GetInterface()->pColModel, scale);
     return pCol;
