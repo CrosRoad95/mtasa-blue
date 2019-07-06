@@ -27,8 +27,8 @@ typedef struct
 
 struct CColSphereSA
 {
-    float        fRadius;
     CVector      vecCenter;
+    float        fRadius;
     uchar        material;
     uchar        flags;
     uchar        lighting;
@@ -108,7 +108,10 @@ typedef struct
             triangle = pColTriangles[i];
             count = std::max(count, std::max(triangle.v1, std::max(triangle.v2, triangle.v3)));
         }
-        return count + 1;
+        if (count > 0)
+            return count + 1;
+
+        return count;
     }
 } CColDataSA;
 
