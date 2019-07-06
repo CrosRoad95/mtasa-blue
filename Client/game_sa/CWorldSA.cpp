@@ -80,13 +80,13 @@ void CWorldSA::InstallHooks()
     HookInstall(0x565CB0, (DWORD)HOOK_FallenPeds, 5);
     HookInstall(0x565E80, (DWORD)HOOK_FallenCars, 5);
     HookInstall(0x535300, (DWORD)HOOK_GetColModel, 5);
-    HookInstall(0x53412A, (DWORD)HOOK_GetBoundRect, 7);
+    //HookInstall(0x534120, (DWORD)HOOK_GetBoundRect, 6); // doesn't seems to fix it
 }
 
 DWORD CONTINUE_CWorld_FallenPeds = 0x00565CBA;
 DWORD CONTINUE_CWorld_FallenCars = 0x00565E8A;
 DWORD CONTINUE_CWorld_GetColModel = 0x00535305;
-DWORD CONTINUE_CWorld_GetBoundRect = 0x00534131;
+DWORD CONTINUE_CWorld_GetBoundRect = 0x534126;
 
 bool                  bIsObject = false;
 CColModelSAInterface* colModel;
@@ -296,6 +296,9 @@ CColModelSAInterface* GetScaledCollision(CObject* pObject)
     CModelInfoSA*         pModelInfoSA = (CModelInfoSA*)(pGame->GetModelInfo(pObject->GetModelIndex()));
     CColModelSAInterface* colModel = pModelInfoSA->GetInterface()->pColModel;
 
+    colModel->boundingBox.vecMax *= 10;
+    colModel->boundingBox.vecMin *= 10;
+    colModel->boundingBox.fRadius *= 10;
     return GetScaled(pObject->GetModelIndex(), colModel, pObject->GetScale());
 }
 
@@ -567,6 +570,7 @@ void GetBoundRect(CEntitySAInterface* pEntity)
     }
 }
 
+DWORD _ZN10CModelInfo16ms_modelInfoPtrsE = 0xA9B0C8;
 void _declspec(naked) HOOK_GetBoundRect()
 {
     _asm
@@ -576,68 +580,90 @@ void _declspec(naked) HOOK_GetBoundRect()
         call    GetBoundRect
         add     esp, 4
         popad
+    }
 
-        mov     ecx, pColModelReplace;
-        jmp CONTINUE_CWorld_GetBoundRect;
+    _asm
+    { 
+        sub esp, 34h
+        push esi
+        mov esi, ecx
+    }
+
+    if (bGotReplaced)
+    {
+        _asm
+        {
+            mov     eax, pColModelReplace
+            jmp CONTINUE_CWorld_GetBoundRect
+        }
+    }
+    else
+    {
+        _asm
+        {
+            mov     ecx, ds:_ZN10CModelInfo16ms_modelInfoPtrsE[eax*4]
+            mov     eax, [ecx+14]
+            jmp CONTINUE_CWorld_GetBoundRect
+        }
     }
 }
 
     void _declspec(naked) HOOK_GetColModel()
+{
+    _asm
     {
-        _asm
-        {
         pushad
         push    ecx
         call    GetColModel
         mov     colModel, eax
         add     esp, 4
         popad
-        }
+    }
 
-        if (bIsObject)
+    if (bIsObject)
+    {
+        colModel = DoSomethingWithCollision(pObject);
+        _asm
         {
-            colModel = DoSomethingWithCollision(pObject);
-            _asm
-            {
             mov eax, colModel
             retn
-            }
         }
-        else
-        {
-            _asm {
+    }
+    else
+    {
+        _asm {
         mov al, [ecx + 36h]
         and al, 7 
         jmp CONTINUE_CWorld_GetColModel
-            }
         }
     }
+}
 
-    void _declspec(naked) HOOK_FallenPeds()
+void _declspec(naked) HOOK_FallenPeds()
+{
+    if (pGame && pGame->IsUnderWorldWarpEnabled())
     {
-        if (pGame && pGame->IsUnderWorldWarpEnabled())
-        {
-            _asm {
+        _asm {
             sub esp, 2Ch
             push ebx
             mov ebx, ds:0B74490h
             jmp CONTINUE_CWorld_FallenPeds
-            }
-        }
-        else
-        {
-            _asm
-            {
-            ret
-            }
         }
     }
+    else
+    {
+        _asm
+        {
+            ret
+        }
+    }
+}
 
 void _declspec(naked) HOOK_FallenCars()
 {
     if (pGame && pGame->IsUnderWorldWarpEnabled())
     {
-        _asm
+        _asm {
             sub esp, 2Ch
             push ebx
             mov ebx, ds:0B74494h
