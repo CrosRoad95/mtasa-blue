@@ -21,7 +21,7 @@ typedef struct
 {
     CVector vecMin;
     CVector vecMax;
-    CVector vecOffset;
+    CVector vecCenter;
     float   fRadius;
 } CBoundingBoxSA;
 

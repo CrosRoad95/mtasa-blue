@@ -73,17 +73,20 @@ bool CWorldSA::ResetSurfaceInfo(short sSurfaceID)
 void HOOK_FallenPeds();
 void HOOK_FallenCars();
 void HOOK_GetColModel();
+void HOOK_GetBoundRect();
 
 void CWorldSA::InstallHooks()
 {
     HookInstall(0x565CB0, (DWORD)HOOK_FallenPeds, 5);
     HookInstall(0x565E80, (DWORD)HOOK_FallenCars, 5);
     HookInstall(0x535300, (DWORD)HOOK_GetColModel, 5);
+    HookInstall(0x53412A, (DWORD)HOOK_GetBoundRect, 7);
 }
 
 DWORD CONTINUE_CWorld_FallenPeds = 0x00565CBA;
 DWORD CONTINUE_CWorld_FallenCars = 0x00565E8A;
 DWORD CONTINUE_CWorld_GetColModel = 0x00535305;
+DWORD CONTINUE_CWorld_GetBoundRect = 0x00534131;
 
 bool                  bIsObject = false;
 CColModelSAInterface* colModel;
@@ -218,15 +221,14 @@ ScaledCollision* GetScaledCollision(WORD model, CVector* targetScale)
     for (int i = 0; i < original->verticesCount; i++)
         scaledCollision->vertices[i] = original->vertices[i];
 
-
-
     ////////////////////////////
 
     memcpy(&scaledCollision->boundingBox, &original->boundingBox, sizeof(CBoundingBoxSA));
 
-    scaledCollision->boundingBox.fRadius *= std::max(targetScale->fX, std::max(targetScale->fY, targetScale->fZ)) * 10;
-    scaledCollision->boundingBox.vecMax *= *targetScale * 10;
-    scaledCollision->boundingBox.vecMin *= *targetScale * 10;
+    scaledCollision->boundingBox.fRadius *= std::max(targetScale->fX, std::max(targetScale->fY, targetScale->fZ));
+    scaledCollision->boundingBox.vecCenter *= (*targetScale / 2);
+    scaledCollision->boundingBox.vecMax *= *targetScale;
+    scaledCollision->boundingBox.vecMin *= *targetScale;
 
     for (int i = 0; i < scaledCollision->spheresCount; i++)
     {
@@ -415,6 +417,23 @@ namespace
     }
 }            // namespace
 
+void DrawSphere(CVector pos, float radius, unsigned int color)
+{
+    CGraphicsInterface* pGraphics = g_pCore->GetGraphics();
+
+    float fLineWidth = 4.f + pow(radius, 0.5f);
+    uint  iterations = Clamp(1, Round(pow(radius, 0.25f) * 0.75f), 4);
+
+    const SWireModel& model = GetSphereWireModel(iterations);
+
+    for (uint i = 0; i < model.vertexList.size(); i += 2)
+    {
+        const CVector& vecBegin = model.vertexList[i] * radius + pos;
+        const CVector& vecEnd = model.vertexList[i + 1] * radius + pos;
+        pGraphics->DrawLine3DQueued(vecBegin, vecEnd, fLineWidth, color, false);
+    }
+}
+
 void DrawCollisionDebug(CObject* pObject)
 {
     CColModelSAInterface* colModel = GetScaledCollision(pObject);
@@ -423,23 +442,23 @@ void DrawCollisionDebug(CObject* pObject)
     if (pColData == nullptr)
         return;
 
-    CVector  vecPosition = *pObject->GetPosition();
+    CVector vecPosition = *pObject->GetPosition();
 
     CVector      bboxMin = colModel->boundingBox.vecMin;
     CVector      bboxMax = colModel->boundingBox.vecMax;
     unsigned int color = (unsigned int)colModel;            // make color depends on collision
-    color |= 0x000000ff;    // with alpha 255
+    color |= 0x000000ff;                                    // with alpha 255
 
     // g_pCore->GetGraphics()->DrawLine3DQueued(vecPosition - bboxMin, vecPosition + bboxMax, 10, (unsigned int)colModel,false);
 
     float fLineWidth = 4.f + pow(colModel->boundingBox.fRadius, 0.5f);
 
-    CVector           trianglePosition[3];
-    CVector posMin;
-    CVector           posMax;
-    CColBoxSA*        pColBox;
-    CColSphereSA*     pColSphere;
-    CVector           spherePos; 
+    CVector       trianglePosition[3];
+    CVector       posMin;
+    CVector       posMax;
+    CColBoxSA*    pColBox;
+    CColSphereSA* pColSphere;
+    CVector       spherePos;
 
     for (int i = 0; i < pColData->numColTriangles; i++)
     {
@@ -481,20 +500,32 @@ void DrawCollisionDebug(CObject* pObject)
     {
         pColSphere = &pColData->pColSpheres[i];
         spherePos = pColSphere->vecCenter + vecPosition;
-        CGraphicsInterface* pGraphics = g_pCore->GetGraphics();
-
-        uint iterations = Clamp(1, Round(pow(pColSphere->fRadius, 0.25f) * 0.75f), 4);
-
-        const SWireModel& model = GetSphereWireModel(iterations);
-
-        for (uint i = 0; i < model.vertexList.size(); i += 2)
-        {
-            const CVector& vecBegin = model.vertexList[i] * pColSphere->fRadius + spherePos;
-            const CVector& vecEnd = model.vertexList[i + 1] * pColSphere->fRadius + spherePos;
-            pGraphics->DrawLine3DQueued(vecBegin, vecEnd, fLineWidth, color, false);
-        }
+        DrawSphere(spherePos, pColSphere->fRadius, color);
     }
-    // CColModelSAInterface* pCol = GetScaled(pObject->GetModelIndex(), pModelInfoSA->GetInterface()->pColModel, scale);
+
+    // Bounding Box
+    posMin = colModel->boundingBox.vecMin + vecPosition;
+    posMax = colModel->boundingBox.vecMax + vecPosition;
+
+    // vertical lines
+    g_pCore->GetGraphics()->DrawLine3DQueued(CVector(posMin.fX, posMin.fY, posMin.fZ), CVector(posMin.fX, posMin.fY, posMax.fZ), fLineWidth, color, false);
+    g_pCore->GetGraphics()->DrawLine3DQueued(CVector(posMax.fX, posMin.fY, posMin.fZ), CVector(posMax.fX, posMin.fY, posMax.fZ), fLineWidth, color, false);
+    g_pCore->GetGraphics()->DrawLine3DQueued(CVector(posMax.fX, posMax.fY, posMin.fZ), CVector(posMax.fX, posMax.fY, posMax.fZ), fLineWidth, color, false);
+    g_pCore->GetGraphics()->DrawLine3DQueued(CVector(posMin.fX, posMax.fY, posMin.fZ), CVector(posMin.fX, posMax.fY, posMax.fZ), fLineWidth, color, false);
+
+    // one corner
+    g_pCore->GetGraphics()->DrawLine3DQueued(CVector(posMin.fX, posMin.fY, posMin.fZ), CVector(posMin.fX, posMax.fY, posMin.fZ), fLineWidth, color, false);
+    g_pCore->GetGraphics()->DrawLine3DQueued(CVector(posMin.fX, posMin.fY, posMin.fZ), CVector(posMax.fX, posMin.fY, posMin.fZ), fLineWidth, color, false);
+    g_pCore->GetGraphics()->DrawLine3DQueued(CVector(posMin.fX, posMin.fY, posMax.fZ), CVector(posMin.fX, posMax.fY, posMax.fZ), fLineWidth, color, false);
+    g_pCore->GetGraphics()->DrawLine3DQueued(CVector(posMin.fX, posMin.fY, posMax.fZ), CVector(posMax.fX, posMin.fY, posMax.fZ), fLineWidth, color, false);
+
+    // second corner
+    g_pCore->GetGraphics()->DrawLine3DQueued(CVector(posMax.fX, posMax.fY, posMin.fZ), CVector(posMin.fX, posMax.fY, posMin.fZ), fLineWidth, color, false);
+    g_pCore->GetGraphics()->DrawLine3DQueued(CVector(posMax.fX, posMax.fY, posMin.fZ), CVector(posMax.fX, posMin.fY, posMin.fZ), fLineWidth, color, false);
+    g_pCore->GetGraphics()->DrawLine3DQueued(CVector(posMax.fX, posMax.fY, posMax.fZ), CVector(posMin.fX, posMax.fY, posMax.fZ), fLineWidth, color, false);
+    g_pCore->GetGraphics()->DrawLine3DQueued(CVector(posMax.fX, posMax.fY, posMax.fZ), CVector(posMax.fX, posMin.fY, posMax.fZ), fLineWidth, color, false);
+
+    DrawSphere(colModel->boundingBox.vecCenter + vecPosition, colModel->boundingBox.fRadius, color);
 }
 
 CColModelSAInterface* DoSomethingWithCollision(CObject* pObject)
@@ -504,69 +535,114 @@ CColModelSAInterface* DoSomethingWithCollision(CObject* pObject)
     return pCol;
 }
 
-void _declspec(naked) HOOK_GetColModel()
+typedef struct
+{
+    float left;
+    float bottom;
+    float right;
+    float top;
+} CRect;
+
+CRect* rectRet;
+
+
+bool bGotReplaced = false;
+CColModelSAInterface* pColModelReplace;
+
+void GetBoundRect(CEntitySAInterface* pEntity)
+{
+
+    CObjectSAInterface* pInterface = static_cast<CObjectSAInterface*>(pEntity);
+
+    SClientEntity<CObjectSA>* pObjectClientEntity = g_pCore->GetGame()->GetPools()->GetObjectA((DWORD*)pInterface);
+    CObjectSA* pObject = pObjectClientEntity ? pObjectClientEntity->pEntity : nullptr;
+    if (pObject != nullptr)
+    {
+        bGotReplaced = true;
+        pColModelReplace = GetScaledCollision(pObject);
+    }
+    else
+    {
+        bGotReplaced = false;
+    }
+}
+
+void _declspec(naked) HOOK_GetBoundRect()
 {
     _asm
     {
+        pushad
+        push    esi
+        call    GetBoundRect
+        add     esp, 4
+        popad
+
+        mov     ecx, pColModelReplace;
+        jmp CONTINUE_CWorld_GetBoundRect;
+    }
+}
+
+    void _declspec(naked) HOOK_GetColModel()
+    {
+        _asm
+        {
         pushad
         push    ecx
         call    GetColModel
         mov     colModel, eax
         add     esp, 4
         popad
-    }
+        }
 
-    if (bIsObject)
-    {
-        colModel = DoSomethingWithCollision(pObject);
-        _asm
+        if (bIsObject)
         {
+            colModel = DoSomethingWithCollision(pObject);
+            _asm
+            {
             mov eax, colModel
             retn
+            }
         }
-    }
-    else
-    {
-        _asm {
+        else
+        {
+            _asm {
         mov al, [ecx + 36h]
         and al, 7 
         jmp CONTINUE_CWorld_GetColModel
+            }
         }
     }
-}
 
-void _declspec(naked) HOOK_FallenPeds()
-{
-    if (pGame && pGame->IsUnderWorldWarpEnabled())
+    void _declspec(naked) HOOK_FallenPeds()
     {
-        _asm
+        if (pGame && pGame->IsUnderWorldWarpEnabled())
         {
+            _asm {
             sub esp, 2Ch
             push ebx
             mov ebx, ds:0B74490h
             jmp CONTINUE_CWorld_FallenPeds
+            }
         }
-    }
-    else
-    {
-        _asm
+        else
         {
+            _asm
+            {
             ret
+            }
         }
     }
-}
 
 void _declspec(naked) HOOK_FallenCars()
 {
     if (pGame && pGame->IsUnderWorldWarpEnabled())
     {
         _asm
-        {
             sub esp, 2Ch
             push ebx
             mov ebx, ds:0B74494h
             jmp CONTINUE_CWorld_FallenCars
-        }
+            }
     }
     else
     {
