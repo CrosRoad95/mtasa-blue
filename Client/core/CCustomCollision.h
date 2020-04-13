@@ -12,9 +12,47 @@
 
 #include <core/CCustomCollisionInterface.h>
 
+#include "../game_sa/CColModelSA.h"
+
+class OriginalCollisions
+{
+public:
+    CColSphereSA*     spheres;
+    CColBoxSA*        boxes;
+    CompressedVector* vertices;
+    ushort            spheresCount;
+    ushort            boxesCount;
+    ushort            verticesCount;
+    CBoundingBoxSA    boundingBox;
+};
+
+class ScaledCollision
+{
+public:
+    CVector*          scale;
+    CColSphereSA*     spheres;
+    CColBoxSA*        boxes;
+    CompressedVector* vertices;
+    ushort            spheresCount;
+    ushort            boxesCount;
+    ushort            verticesCount;
+    CBoundingBoxSA    boundingBox;
+};
+
 class CCustomCollision : public CCustomCollisionInterface
 {
 public:
     CCustomCollision();
     ~CCustomCollision();
+    CColModelSAInterface* GetCustomCollision(CObject* pObject);
+
+private:
+    CColModelSAInterface*  GetOriginalColModel(CEntitySAInterface* pEntity);
+    void SaveOriginalCollisionIfDoesNotExists(WORD model, CColModelSAInterface* colModel);
+    ScaledCollision* GetScaledCollision(WORD model, CVector* targetScale);
+    CColModelSAInterface* GetScaled(WORD model, CColModelSAInterface* colModel, CVector* scale);
+    CColModelSAInterface* GetScaledCollision(CObject* pObject);
+
+    std::map<WORD, std::vector<ScaledCollision*>> scaledCollisions = std::map<WORD, std::vector<ScaledCollision*>>();
+    std::map<WORD, OriginalCollisions*>           originalCollisions = std::map<WORD, OriginalCollisions*>();
 };

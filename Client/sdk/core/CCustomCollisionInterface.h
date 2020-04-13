@@ -12,4 +12,5 @@
 class CCustomCollisionInterface
 {
 public:
+    virtual class CColModelSAInterface* GetCustomCollision(class CObject* pObject) = 0;
 };
