@@ -60,6 +60,7 @@ private:
     CColModelSAInterface* GetScaledCollision(CObject* pObject);
     bool                  SaveOriginalCollision(WORD model);
     CColModelSAInterface* CopyColModel(CColModelSAInterface* pColModel);
+    bool                  HasCustomCollision(CEntitySAInterface* pEntitySA);
 
     std::map<DWORD, CColModelSAInterface*>         m_mapOriginalCollisions; // model = coldata
     std::map<DWORD, CColModelSAInterface*>          m_mapCustomCollisions; // object = coldata

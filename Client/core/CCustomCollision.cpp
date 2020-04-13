@@ -122,6 +122,7 @@ CColModelSAInterface* CCustomCollision::CopyColModel(CColModelSAInterface* pColM
     //    memcpy(pInterface->pColData->pColTrianglePlanes, pColModel->pColData->pColTrianglePlanes,
     //           sizeof(CColTrianglePlaneSA) * pInterface->pColData->numColTriangles);
     //}
+    pInterface->pColData->pColTrianglePlanes = nullptr;
 
     if (pInterface->pColData->numColLines > 0)
     {
@@ -393,6 +394,12 @@ bool CCustomCollision::SetObjectCollision(CEntitySAInterface* pEntitySA, CColMod
     }
 
     return true;
+}
+
+bool CCustomCollision::HasCustomCollision(CEntitySAInterface* pEntitySA)
+{
+    DWORD dwRef = (DWORD)pEntitySA;
+    return m_mapCustomCollisions.find(dwRef) != m_mapCustomCollisions.end();
 }
 
 void CCustomCollision::SetObjectScale(CEntitySAInterface* pEntitySA, CVector scale)

@@ -95,10 +95,10 @@ struct CompressedVector
 
 typedef struct
 {
-    WORD                 numColSpheres;
-    WORD                 numColBoxes;
-    WORD                 numColTriangles;
-    BYTE                 numColLines;
+    WORD                 numColSpheres = 0;
+    WORD                 numColBoxes = 0;
+    WORD                 numColTriangles = 0;
+    BYTE                 numColLines = 0;
     BYTE                 flags;
     CColSphereSA*        pColSpheres = nullptr;
     CColBoxSA*           pColBoxes = nullptr;
@@ -106,8 +106,8 @@ typedef struct
     CompressedVector*    pVertices = nullptr;
     CColTriangleSA*      pColTriangles = nullptr;
     CColTrianglePlaneSA* pColTrianglePlanes = nullptr;
-    WORD                 numShadowTriangles;
-    WORD                 numShadowVertices;
+    WORD                 numShadowTriangles = 0;
+    WORD                 numShadowVertices = 0;
     CompressedVector*    pShadowVertices = nullptr;
     CColTriangleSA*      pShadowTriangles = nullptr;
 

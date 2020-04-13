@@ -73,20 +73,20 @@ bool CWorldSA::ResetSurfaceInfo(short sSurfaceID)
 void HOOK_FallenPeds();
 void HOOK_FallenCars();
 void HOOK_GetColModel();
-void HOOK_GetBoundRect();
+void HOOK_GetIsTouching();
 
 void CWorldSA::InstallHooks()
 {
     HookInstall(0x565CB0, (DWORD)HOOK_FallenPeds, 5);
     HookInstall(0x565E80, (DWORD)HOOK_FallenCars, 5);
     HookInstall(0x535300, (DWORD)HOOK_GetColModel, 5);
-    //HookInstall(0x534120, (DWORD)HOOK_GetBoundRect, 6); // doesn't seems to fix it
+    HookInstall(0x5344B0, (DWORD)HOOK_GetIsTouching, 6);
 }
 
 DWORD CONTINUE_CWorld_FallenPeds = 0x00565CBA;
 DWORD CONTINUE_CWorld_FallenCars = 0x00565E8A;
 DWORD CONTINUE_CWorld_GetColModel = 0x00535305;
-DWORD CONTINUE_CWorld_GetBoundRect = 0x534126;
+DWORD CONTINUE_CWorld_GetIsTouching = 0x005344B6;
 
 CColModelSAInterface* GetCollision(CObject* pObject)
 {
@@ -102,29 +102,8 @@ typedef struct
     float top;
 } CRect;
 
-CRect* rectRet;
-
-
 bool bGotReplaced = false;
 CColModelSAInterface* pColModelReplace;
-//
-//void GetBoundRect(CEntitySAInterface* pEntity)
-//{
-//    CObjectSAInterface* pInterface = static_cast<CObjectSAInterface*>(pEntity);
-//
-//    SClientEntity<CObjectSA>* pObjectClientEntity = g_pCore->GetGame()->GetPools()->GetObjectA((DWORD*)pInterface);
-//    CObjectSA* pObject = pObjectClientEntity ? pObjectClientEntity->pEntity : nullptr;
-//    if (pObject != nullptr)
-//    {
-//        bGotReplaced = true;
-//        pColModelReplace = GetScaledCollision(pObject);
-//    }
-//    else
-//    {
-//        bGotReplaced = false;
-//    }
-//}
-
 bool                  bIsObject = false;
 CColModelSAInterface* colModel;
 CObject*              pObject;
@@ -145,44 +124,60 @@ void GetColModel(CEntitySAInterface* pEntity)
         }
     }
 }
-//
-//DWORD _ZN10CModelInfo16ms_modelInfoPtrsE = 0xA9B0C8;
-//void _declspec(naked) HOOK_GetBoundRect()
-//{
-//    _asm
-//    {
-//        pushad
-//        push    esi
-//        call    GetBoundRect
-//        add     esp, 4
-//        popad
-//    }
-//
-//    _asm
-//    { 
-//        sub esp, 34h
-//        push esi
-//        mov esi, ecx
-//    }
-//
-//    if (bGotReplaced)
-//    {
-//        _asm
-//        {
-//            mov     eax, pColModelReplace
-//            jmp CONTINUE_CWorld_GetBoundRect
-//        }
-//    }
-//    else
-//    {
-//        _asm
-//        {
-//            mov     ecx, ds:_ZN10CModelInfo16ms_modelInfoPtrsE[eax*4]
-//            mov     eax, [ecx+14]
-//            jmp CONTINUE_CWorld_GetBoundRect
-//        }
-//    }
-//}
+
+bool isTouchingCustomCollision = false;
+void GetIsTouching(CEntitySAInterface* pEntity, int posn, float radius)
+{
+    if (pEntity->nType == ENTITY_TYPE_OBJECT)
+    {
+        // g_pCore->GetConsole()->Printf("Model %i", pEntity->m_nModelIndex);
+        CObjectSAInterface* pInterface = static_cast<CObjectSAInterface*>(pEntity);
+
+        SClientEntity<CObjectSA>* pObjectClientEntity = g_pCore->GetGame()->GetPools()->GetObjectA((DWORD*)pInterface);
+        pObject = pObjectClientEntity ? pObjectClientEntity->pEntity : nullptr;
+        if (pObject != nullptr)
+        {
+            if (g_pCore->GetCustomCollision()->HasCustomCollision(pObject->GetInterface()))
+            {
+                isTouchingCustomCollision = true;
+                return;
+            }
+        }
+    }
+    isTouchingCustomCollision = false;
+}
+
+void _declspec(naked) HOOK_GetIsTouching()
+{
+    _asm
+    {
+        pushad
+        push    edx
+        push    ecx
+        push    ecx
+        call    GetIsTouching
+        //mov     colModel, eax
+        add     esp, 12
+        popad
+    }
+
+    if (isTouchingCustomCollision)
+    {
+        _asm
+        {
+            mov     eax, 1
+            retn    8
+        }
+    }
+
+    _asm
+    {
+        sub     esp, 0Ch
+        push    esi
+        mov     esi, ecx
+        jmp CONTINUE_CWorld_GetIsTouching
+    }
+}
 
 void _declspec(naked) HOOK_GetColModel()
 {

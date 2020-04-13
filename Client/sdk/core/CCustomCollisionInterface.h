@@ -16,4 +16,5 @@ public:
     virtual class CColModelSAInterface* GetCustomCollision(class CObject* pObject) = 0;
     virtual void                        SetObjectScale(CEntitySAInterface* pEntitySA, CVector scale) = 0;
     virtual bool                        SetObjectCollision(CEntitySAInterface* pEntitySA, CColModelSAInterface* pColModelSA) = 0;
+    virtual bool                        HasCustomCollision(CEntitySAInterface* pEntitySA) = 0;
 };
