@@ -69,3 +69,4 @@
 #include "CNickGen.h"
 #include <core/CWebViewInterface.h>
 #include "CTrayIcon.h"
+#include "CCustomCollision.h"

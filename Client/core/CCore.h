@@ -40,6 +40,7 @@ class CCore;
 #include <ijsify.h>
 #include <core/CWebCoreInterface.h>
 #include "CTrayIcon.h"
+#include "CCustomCollision.h"
 
 #define DIRECTINPUT_VERSION 0x0800
 #include <dinput.h>
@@ -102,6 +103,8 @@ public:
     CLocalizationInterface*   GetLocalization() { return g_pLocalization; };
     CWebCoreInterface*        GetWebCore();
     CTrayIconInterface*       GetTrayIcon() { return m_pTrayIcon; };
+    CCustomCollisionInterface*GetCustomCollision() { return m_pCustomCollision; }
+
     CDiscordManagerInterface* GetDiscordManager() { return reinterpret_cast<CDiscordManagerInterface*>(m_DiscordManager.get()); }
 
     void SaveConfig(bool bWaitUntilFinished = false);
@@ -298,6 +301,7 @@ private:
     CClientVariables   m_ClientVariables;
     CWebCoreInterface* m_pWebCore = nullptr;
     CTrayIcon*         m_pTrayIcon;
+    CCustomCollision*  m_pCustomCollision;
 
     std::unique_ptr<class CDiscordManager> m_DiscordManager;
 
