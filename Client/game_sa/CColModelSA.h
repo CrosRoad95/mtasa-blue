@@ -135,6 +135,18 @@ public:
     BYTE           unknownFlags;
     BYTE           pad[2];
     CColDataSA*    pColData;
+    ~CColModelSAInterface()
+    {
+        delete pColData->pColSpheres;
+        delete pColData->pColBoxes;
+        delete pColData->pSuspensionLines;
+        delete pColData->pVertices;
+        delete pColData->pColTriangles;
+        delete pColData->pColTrianglePlanes;
+        delete pColData->pShadowVertices;
+        delete pColData->pShadowTriangles;
+        delete pColData;
+    }
 };
 
 class CColModelSA : public CColModel

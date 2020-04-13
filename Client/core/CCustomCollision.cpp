@@ -380,16 +380,21 @@ bool CCustomCollision::SetObjectCollision(CEntitySAInterface* pEntitySA, CColMod
 {
     DWORD              dwRef = (DWORD)pEntitySA;
     SaveOriginalCollision(pEntitySA->m_nModelIndex);
-    if (m_mapCustomCollisions.find(dwRef) == m_mapCustomCollisions.end())
+    if (m_mapCustomCollisions.find(dwRef) != m_mapCustomCollisions.end())
+    {
+        delete m_mapCustomCollisions[dwRef];
+        auto it = m_mapCustomCollisions.find(dwRef);
+        m_mapCustomCollisions.erase(it);
+    }
+    if (pColModelSA)
     {
         CColModelSAInterface* pCopiedColModel = CopyColModel(pColModelSA);
         m_mapCustomCollisions.insert({dwRef, pCopiedColModel});
     }
-    //GetOriginalColModel(pObject->GetInterface());
 
-    int a = 5;
     return true;
 }
+
 void CCustomCollision::SetObjectScale(CEntitySAInterface* pEntitySA, CVector scale)
 {
     DWORD              dwRef = (DWORD)pEntitySA;
