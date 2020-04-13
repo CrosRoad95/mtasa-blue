@@ -39,6 +39,8 @@ public:
     void GetPosition(CVector& vecPosition) const {};
     void SetPosition(const CVector& vecPosition){};
 
+    CColModel* GetColModel() const { return m_pColModel; }
+
 private:
     bool LoadFromFile(SString filePath);
     bool LoadFromBuffer(SString buffer);

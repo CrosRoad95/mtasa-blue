@@ -65,6 +65,14 @@ typedef struct
 
 typedef struct
 {
+    CVector vecStart;
+    float   fStartSize;
+    CVector vecEnd;
+    float   fEndSize;
+} CColLineSA;
+
+typedef struct
+{
     char  version[4];
     DWORD size;
     char  name[0x18];
@@ -90,14 +98,18 @@ typedef struct
     WORD                 numColSpheres;
     WORD                 numColBoxes;
     WORD                 numColTriangles;
-    BYTE                 ucNumWheels;
-    BYTE                 pad3;
-    CColSphereSA*        pColSpheres;
-    CColBoxSA*           pColBoxes;
-    void*                pSuspensionLines;
-    CompressedVector*    pVertices;
-    CColTriangleSA*      pColTriangles;
-    CColTrianglePlaneSA* pColTrianglePlanes;
+    BYTE                 numColLines;
+    BYTE                 flags;
+    CColSphereSA*        pColSpheres = nullptr;
+    CColBoxSA*           pColBoxes = nullptr;
+    CColLineSA*          pSuspensionLines = nullptr;
+    CompressedVector*    pVertices = nullptr;
+    CColTriangleSA*      pColTriangles = nullptr;
+    CColTrianglePlaneSA* pColTrianglePlanes = nullptr;
+    WORD                 numShadowTriangles;
+    WORD                 numShadowVertices;
+    CompressedVector*    pShadowVertices = nullptr;
+    CColTriangleSA*      pShadowTriangles = nullptr;
 
     ushort getNumVertices() const
     {

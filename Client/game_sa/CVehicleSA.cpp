@@ -2227,7 +2227,7 @@ void* CVehicleSA::GetPrivateSuspensionLines()
         else
         {
             // CAutomobile allocates wheels * 32 (0x20)
-            m_pSuspensionLines = new BYTE[pColData->ucNumWheels * 0x20];
+            m_pSuspensionLines = new BYTE[pColData->numColLines * 0x20];
         }
     }
 
@@ -2254,7 +2254,7 @@ void CVehicleSA::CopyGlobalSuspensionLinesToPrivate()
     {
         // CAutomobile allocates wheels * 32 (0x20)
         if (pColData->pSuspensionLines)
-            memcpy(GetPrivateSuspensionLines(), pColData->pSuspensionLines, pColData->ucNumWheels * 0x20);
+            memcpy(GetPrivateSuspensionLines(), pColData->pSuspensionLines, pColData->numColLines * 0x20);
     }
 }
 

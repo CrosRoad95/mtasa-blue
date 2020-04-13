@@ -290,6 +290,7 @@ public:
                            CEasingCurve::eType a_eEasingType, double a_fEasingPeriod, double a_fEasingAmplitude, double a_fEasingOvershoot);
     static bool StopObject(CClientEntity& Entity);
     static bool SetObjectScale(CClientEntity& Entity, const CVector& vecScale);
+    static bool SetObjectCollisionScale(CClientEntity& Entity, const CVector& vecScale);
     static bool SetObjectStatic(CClientEntity& Entity, bool bStatic);
     static bool SetObjectBreakable(CClientEntity& Entity, bool bBreakable);
     static bool BreakObject(CClientEntity& Entity);

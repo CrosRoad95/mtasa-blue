@@ -24,11 +24,6 @@ CCustomCollision::~CCustomCollision()
 
 }
 
-
-bool                  bIsObject = false;
-CColModelSAInterface* colModel;
-CObject*              pObject;
-
 CColModelSAInterface* CCustomCollision::GetOriginalColModel(CEntitySAInterface* pEntity)
 {
     CModelInfoSA*         pModelInfoSA = (CModelInfoSA*)(g_pCore->GetGame()->GetModelInfo(pEntity->m_nModelIndex));
@@ -70,6 +65,91 @@ void CCustomCollision::SaveOriginalCollisionIfDoesNotExists(WORD model, CColMode
 
         originalCollisions[model] = original;
     }
+}
+
+CColModelSAInterface* CCustomCollision::CopyColModel(CColModelSAInterface* pColModel)
+{
+    CColModelSAInterface* pInterface = new CColModelSAInterface();
+    pInterface->boundingBox = pColModel->boundingBox;
+    pInterface->level = pColModel->level;
+    memcpy(pInterface->pad, pColModel->pad, sizeof(BYTE) * 2);
+    pInterface->unknownFlags = pColModel->unknownFlags;
+    pInterface->pColData = new CColDataSA();
+    pInterface->pColData->numColSpheres = pColModel->pColData->numColSpheres;
+    pInterface->pColData->numColBoxes = pColModel->pColData->numColBoxes;
+    pInterface->pColData->numColTriangles = pColModel->pColData->numColTriangles;
+    pInterface->pColData->numColLines = pColModel->pColData->numColLines;
+    pInterface->pColData->numShadowTriangles = pColModel->pColData->numShadowTriangles;
+    pInterface->pColData->numShadowVertices = pColModel->pColData->numShadowVertices;
+    pInterface->pColData->flags = pColModel->pColData->flags;
+
+    if (pInterface->pColData->numShadowTriangles > 0)
+    {
+        pInterface->pColData->pShadowVertices = new CompressedVector[pInterface->pColData->numShadowTriangles];
+        memcpy(pInterface->pColData->pShadowVertices, pInterface->pColData->pShadowVertices,
+               sizeof(CompressedVector) * pInterface->pColData->numShadowTriangles);
+    }
+
+    if (pInterface->pColData->numShadowTriangles > 0)
+    {
+        pInterface->pColData->pShadowTriangles = new CColTriangleSA[pInterface->pColData->numShadowTriangles];
+        memcpy(pInterface->pColData->pShadowTriangles, pColModel->pColData->pShadowTriangles,
+               sizeof(CColTriangleSA) * pInterface->pColData->numShadowTriangles);
+    }
+
+    if (pInterface->pColData->numColSpheres > 0)
+    {
+        pInterface->pColData->pColSpheres = new CColSphereSA[pInterface->pColData->numColSpheres];
+        memcpy(pInterface->pColData->pColSpheres, pColModel->pColData->pColSpheres, sizeof(CColSphereSA) * pInterface->pColData->numColSpheres);
+    }
+
+    if (pInterface->pColData->numColBoxes > 0)
+    {
+        pInterface->pColData->pColBoxes = new CColBoxSA[pInterface->pColData->numColBoxes];
+        memcpy(pInterface->pColData->pColBoxes, pColModel->pColData->pColBoxes, sizeof(CColBoxSA) * pInterface->pColData->numColBoxes);
+    }
+
+    if (pInterface->pColData->numColTriangles > 0)
+    {
+        pInterface->pColData->pColTriangles = new CColTriangleSA[pInterface->pColData->numColTriangles];
+        memcpy(pInterface->pColData->pColTriangles, pColModel->pColData->pColTriangles,
+               sizeof(CColTriangleSA) * pInterface->pColData->numColTriangles);
+    }
+
+    //if (pInterface->pColData->numColTriangles > 0)
+    //{
+    //    pInterface->pColData->pColTrianglePlanes = new CColTrianglePlaneSA[pInterface->pColData->numColTriangles];
+    //    memcpy(pInterface->pColData->pColTrianglePlanes, pColModel->pColData->pColTrianglePlanes,
+    //           sizeof(CColTrianglePlaneSA) * pInterface->pColData->numColTriangles);
+    //}
+
+    if (pInterface->pColData->numColLines > 0)
+    {
+        pInterface->pColData->pSuspensionLines = new CColLineSA[pInterface->pColData->numColLines];
+        memcpy(pInterface->pColData->pSuspensionLines, pColModel->pColData->pSuspensionLines, sizeof(CColLineSA) * pInterface->pColData->numColLines);
+    }
+
+    ushort numVertices = pColModel->pColData->getNumVertices();
+    if (numVertices > 0)
+    {
+        pInterface->pColData->pVertices = new CompressedVector[numVertices];
+        memcpy(pInterface->pColData->pVertices, pColModel->pColData->pVertices, sizeof(CompressedVector) * numVertices);
+    }
+    return pInterface;
+}
+
+bool CCustomCollision::SaveOriginalCollision(WORD model)
+{
+    if (m_mapOriginalCollisions.find(model) == m_mapOriginalCollisions.end())
+    {
+        CModelInfoSA*         pModelInfoSA = (CModelInfoSA*)(g_pCore->GetGame()->GetModelInfo(model));
+        CColModelSAInterface* pColModelInterface = pModelInfoSA->GetInterface()->pColModel;
+        CColModelSAInterface* pCopiedColModel = CopyColModel(pColModelInterface);
+
+        m_mapOriginalCollisions.insert({model, pCopiedColModel});
+        return true;
+    }
+    return false;
 }
 
 ScaledCollision* CCustomCollision::GetScaledCollision(WORD model, CVector* targetScale)
@@ -296,12 +376,42 @@ CColModelSAInterface* CCustomCollision::GetScaledCollision(CObject* pObject)
 //    // DrawSphere(colModel->boundingBox.vecCenter + vecPosition, colModel->boundingBox.fRadius, color);
 //}
 
+bool CCustomCollision::SetObjectCollision(CEntitySAInterface* pEntitySA, CColModelSAInterface* pColModelSA)
+{
+    DWORD              dwRef = (DWORD)pEntitySA;
+    SaveOriginalCollision(pEntitySA->m_nModelIndex);
+    if (m_mapCustomCollisions.find(dwRef) == m_mapCustomCollisions.end())
+    {
+        CColModelSAInterface* pCopiedColModel = CopyColModel(pColModelSA);
+        m_mapCustomCollisions.insert({dwRef, pCopiedColModel});
+    }
+    //GetOriginalColModel(pObject->GetInterface());
+
+    int a = 5;
+    return true;
+}
+void CCustomCollision::SetObjectScale(CEntitySAInterface* pEntitySA, CVector scale)
+{
+    DWORD              dwRef = (DWORD)pEntitySA;
+    SaveOriginalCollision(pEntitySA->m_nModelIndex);
+    if (m_mapCustomCollisions.find(pEntitySA->m_nModelIndex) == m_mapCustomCollisions.end())
+    {
+    }
+    //GetOriginalColModel(pObject->GetInterface());
+
+    int a = 5;
+}
+
 CColModelSAInterface* CCustomCollision::GetCustomCollision(CObject* pObject)
 {
-    SClientEntity<CObjectSA>* pObjectClientEntity = g_pCore->GetGame()->GetPools()->GetObjectA((DWORD*)pObject->GetInterface());
-    CObjectSA* pObjectSA = pObjectClientEntity ? pObjectClientEntity->pEntity : nullptr;
-    WORD iModel = pObject->GetModelIndex();
-    return GetOriginalColModel(pObject->GetInterface());
+    DWORD dwInterface = (DWORD)pObject->GetInterface();
+    if (m_mapCustomCollisions.find(dwInterface) == m_mapCustomCollisions.end())
+    {
+        SClientEntity<CObjectSA>* pObjectClientEntity = g_pCore->GetGame()->GetPools()->GetObjectA((DWORD*)pObject->GetInterface());
+        CObjectSA*                pObjectSA = pObjectClientEntity ? pObjectClientEntity->pEntity : nullptr;
+        return GetOriginalColModel(pObject->GetInterface());
+    }
+    return m_mapCustomCollisions[dwInterface];
 }
 /*
     CObjectSAInterface* pInterface = static_cast<CObjectSAInterface*>(pEntity);

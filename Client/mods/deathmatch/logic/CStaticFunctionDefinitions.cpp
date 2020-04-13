@@ -4006,6 +4006,20 @@ bool CStaticFunctionDefinitions::SetObjectScale(CClientEntity& Entity, const CVe
     return false;
 }
 
+bool CStaticFunctionDefinitions::SetObjectCollisionScale(CClientEntity& Entity, const CVector& vecScale)
+{
+    RUN_CHILDREN(SetObjectCollisionScale(**iter, vecScale))
+
+    if (IS_OBJECT(&Entity))
+    {
+        CDeathmatchObject& Object = static_cast<CDeathmatchObject&>(Entity);
+        Object.SetCollisionScale(vecScale);
+        return true;
+    }
+
+    return false;
+}
+
 bool CStaticFunctionDefinitions::SetObjectStatic(CClientEntity& Entity, bool bStatic)
 {
     RUN_CHILDREN(SetObjectStatic(**iter, bStatic))

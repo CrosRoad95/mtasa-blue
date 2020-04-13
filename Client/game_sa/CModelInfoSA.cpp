@@ -970,7 +970,7 @@ void* CModelInfoSA::SetVehicleSuspensionData(void* pSuspensionLines)
 {
     CColDataSA* pColData = GetInterface()->pColModel->pColData;
     void*       pOrigSuspensionLines = pColData->pSuspensionLines;
-    pColData->pSuspensionLines = pSuspensionLines;
+    pColData->pSuspensionLines = (CColLineSA*)pSuspensionLines;
     return pOrigSuspensionLines;
 }
 

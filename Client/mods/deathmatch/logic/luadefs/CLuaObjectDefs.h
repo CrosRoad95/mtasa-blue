@@ -34,6 +34,7 @@ public:
     LUA_DECLARE(MoveObject);
     LUA_DECLARE(StopObject);
     LUA_DECLARE(SetObjectScale);
+    LUA_DECLARE(SetObjectCollisionScale);
     LUA_DECLARE(SetObjectStatic);
     LUA_DECLARE(SetObjectBreakable);
     LUA_DECLARE(BreakObject);

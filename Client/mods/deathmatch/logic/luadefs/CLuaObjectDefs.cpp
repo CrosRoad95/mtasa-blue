@@ -28,6 +28,7 @@ void CLuaObjectDefs::LoadFunctions()
         {"moveObject", MoveObject},
         {"stopObject", StopObject},
         {"setObjectScale", SetObjectScale},
+        {"setObjectCollisionScale", SetObjectCollisionScale},
         {"setObjectStatic", SetObjectStatic},
         {"setObjectBreakable", SetObjectBreakable},
         {"breakObject", BreakObject},
@@ -441,6 +442,40 @@ int CLuaObjectDefs::SetObjectScale(lua_State* luaVM)
     if (!argStream.HasErrors())
     {
         if (CStaticFunctionDefinitions::SetObjectScale(*pEntity, vecScale))
+        {
+            lua_pushboolean(luaVM, true);
+            return 1;
+        }
+    }
+    else
+        m_pScriptDebugging->LogCustom(luaVM, argStream.GetFullErrorMessage());
+
+    lua_pushboolean(luaVM, false);
+    return 1;
+}
+
+int CLuaObjectDefs::SetObjectCollisionScale(lua_State* luaVM)
+{
+    //  bool SetObjectCollisionScale ( object theObject, float scale )
+    CClientEntity* pEntity;
+    CVector        vecScale;
+
+    CScriptArgReader argStream(luaVM);
+    argStream.ReadUserData(pEntity);
+
+    if (argStream.NextIsVector3D())
+    {
+        argStream.ReadVector3D(vecScale);
+    }
+    else
+    {
+        argStream.ReadNumber(vecScale.fX);
+        argStream.ReadNumber(vecScale.fY, vecScale.fX);
+        argStream.ReadNumber(vecScale.fZ, vecScale.fX);
+    }
+    if (!argStream.HasErrors())
+    {
+        if (CStaticFunctionDefinitions::SetObjectCollisionScale(*pEntity, vecScale))
         {
             lua_pushboolean(luaVM, true);
             return 1;

@@ -418,23 +418,42 @@ int CLuaEngineDefs::EngineLoadIFP(lua_State* luaVM)
 
 int CLuaEngineDefs::EngineReplaceCOL(lua_State* luaVM)
 {
-    CClientColModel* pCol = NULL;
+    CClientColModel* pCol = nullptr;
     unsigned short   usModel = 0;
+    CClientEntity*   pEntity = nullptr;
     CScriptArgReader argStream(luaVM);
     // Grab the COL and model ID
     argStream.ReadUserData(pCol);
-    argStream.ReadNumber(usModel);
+    if (argStream.NextIsNumber())
+        argStream.ReadNumber(usModel);
+    else
+        argStream.ReadUserData(pEntity);
 
     if (!argStream.HasErrors())
     {
+        if (pEntity)
+        {
+            usModel = pEntity->GetModelInfo()->GetModel();
+        }
         // Valid client DFF and model?
         if (CClientColModelManager::IsReplacableModel(usModel))
         {
-            // Replace the colmodel
-            if (pCol->Replace(usModel))
+            if (pEntity)
             {
-                lua_pushboolean(luaVM, true);
-                return 1;
+                if(g_pCore->GetCustomCollision()->SetObjectCollision(pEntity->GetGameEntity()->GetInterface(), pCol->GetColModel()->GetInterface()))
+                {
+                    lua_pushboolean(luaVM, true);
+                    return 1;
+                }
+            }
+            else
+            {
+                // Replace the colmodel
+                if (pCol->Replace(usModel))
+                {
+                    lua_pushboolean(luaVM, true);
+                    return 1;
+                }
             }
         }
         else

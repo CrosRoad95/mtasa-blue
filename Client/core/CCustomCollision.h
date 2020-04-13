@@ -14,6 +14,10 @@
 
 #include "../game_sa/CColModelSA.h"
 
+struct SCustomCollision
+{
+    CColModelSAInterface* pCol;
+};
 class OriginalCollisions
 {
 public:
@@ -45,6 +49,8 @@ public:
     CCustomCollision();
     ~CCustomCollision();
     CColModelSAInterface* GetCustomCollision(CObject* pObject);
+    void                  SetObjectScale(CEntitySAInterface* pEntitySA, CVector scale);
+    bool                  SetObjectCollision(CEntitySAInterface* pEntitySA, CColModelSAInterface* pColModelSA);
 
 private:
     CColModelSAInterface*  GetOriginalColModel(CEntitySAInterface* pEntity);
@@ -52,7 +58,11 @@ private:
     ScaledCollision* GetScaledCollision(WORD model, CVector* targetScale);
     CColModelSAInterface* GetScaled(WORD model, CColModelSAInterface* colModel, CVector* scale);
     CColModelSAInterface* GetScaledCollision(CObject* pObject);
+    bool                  SaveOriginalCollision(WORD model);
+    CColModelSAInterface* CopyColModel(CColModelSAInterface* pColModel);
 
+    std::map<DWORD, CColModelSAInterface*>         m_mapOriginalCollisions; // model = coldata
+    std::map<DWORD, CColModelSAInterface*>          m_mapCustomCollisions; // object = coldata
     std::map<WORD, std::vector<ScaledCollision*>> scaledCollisions = std::map<WORD, std::vector<ScaledCollision*>>();
     std::map<WORD, OriginalCollisions*>           originalCollisions = std::map<WORD, OriginalCollisions*>();
 };

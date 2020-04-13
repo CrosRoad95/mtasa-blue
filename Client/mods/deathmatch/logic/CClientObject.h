@@ -82,6 +82,7 @@ public:
     void          SetAlpha(unsigned char ucAlpha);
     void          GetScale(CVector& vecScale) const;
     void          SetScale(const CVector& vecScale);
+    void          SetCollisionScale(const CVector& vecScale);
 
     bool IsCollisionEnabled() { return m_bUsesCollision; };
     void SetCollisionEnabled(bool bCollisionEnabled);
@@ -141,6 +142,7 @@ protected:
     bool          m_bUsesCollision;
     unsigned char m_ucAlpha;
     CVector       m_vecScale;
+    CVector       m_vecCollisionScale;
     float         m_fHealth;
     bool          m_bBreakingDisabled;
     bool          m_bBeingRespawned;

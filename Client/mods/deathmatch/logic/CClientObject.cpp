@@ -36,6 +36,7 @@ CClientObject::CClientObject(CClientManager* pManager, ElementID ID, unsigned sh
     m_bUsesCollision = true;
     m_ucAlpha = 255;
     m_vecScale = CVector(1.0f, 1.0f, 1.0f);
+    m_vecCollisionScale = CVector(1.0f, 1.0f, 1.0f);
     m_fHealth = 1000.0f;
     m_bBreakingDisabled = false;
     m_bRespawnEnabled = true;
@@ -380,6 +381,15 @@ void CClientObject::GetScale(CVector& vecScale) const
     }
 }
 
+void CClientObject::SetCollisionScale(const CVector& vecScale)
+{
+    if (m_pObject)
+    {
+        g_pCore->GetCustomCollision()->SetObjectScale(m_pObject->GetInterface(), m_vecCollisionScale);
+    }
+    m_vecCollisionScale = vecScale;
+}
+
 void CClientObject::SetScale(const CVector& vecScale)
 {
     if (m_pObject)
@@ -520,6 +530,8 @@ void CClientObject::Create()
                     SetCollisionEnabled(false);
                 if (m_vecScale.fX != 1.0f || m_vecScale.fY != 1.0f || m_vecScale.fZ != 1.0f)
                     SetScale(m_vecScale);
+                if (m_vecCollisionScale.fX != 1.0f || m_vecCollisionScale.fY != 1.0f || m_vecCollisionScale.fZ != 1.0f)
+                    g_pCore->GetCustomCollision()->SetObjectScale(m_pObject->GetInterface(), m_vecCollisionScale);
                 m_pObject->SetAreaCode(m_ucInterior);
                 SetAlpha(m_ucAlpha);
                 m_pObject->SetHealth(m_fHealth);
