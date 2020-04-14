@@ -590,6 +590,8 @@ void CClientObject::Destroy()
     // If the object exists
     if (m_pObject)
     {
+        g_pCore->GetCustomCollision()->RemoveCustomCollision(m_pObject->GetInterface());
+
         // Invalidate
         m_pManager->InvalidateEntity(this);
 

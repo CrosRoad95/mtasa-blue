@@ -377,10 +377,22 @@ CColModelSAInterface* CCustomCollision::GetScaledCollision(CObject* pObject)
 //    // DrawSphere(colModel->boundingBox.vecCenter + vecPosition, colModel->boundingBox.fRadius, color);
 //}
 
+bool CCustomCollision::RemoveCustomCollision(CEntitySAInterface* pEntitySA)
+{
+    DWORD dwRef = (DWORD)pEntitySA;
+    if (m_mapCustomCollisions.find(dwRef) != m_mapCustomCollisions.end())
+    {
+        delete m_mapCustomCollisions[dwRef];
+        auto it = m_mapCustomCollisions.find(dwRef);
+        m_mapCustomCollisions.erase(it);
+        return true;
+    }
+    return false;
+}
+
 bool CCustomCollision::SetObjectCollision(CEntitySAInterface* pEntitySA, CColModelSAInterface* pColModelSA)
 {
     DWORD              dwRef = (DWORD)pEntitySA;
-    SaveOriginalCollision(pEntitySA->m_nModelIndex);
     if (m_mapCustomCollisions.find(dwRef) != m_mapCustomCollisions.end())
     {
         delete m_mapCustomCollisions[dwRef];
@@ -389,6 +401,7 @@ bool CCustomCollision::SetObjectCollision(CEntitySAInterface* pEntitySA, CColMod
     }
     if (pColModelSA)
     {
+        SaveOriginalCollision(pEntitySA->m_nModelIndex);
         CColModelSAInterface* pCopiedColModel = CopyColModel(pColModelSA);
         m_mapCustomCollisions.insert({dwRef, pCopiedColModel});
     }
