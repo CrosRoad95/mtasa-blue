@@ -105,6 +105,8 @@ public:
     static bool          SetElementCallPropagationEnabled(CClientEntity& Entity, bool bEnabled);
     static bool          IsElementFrozenWaitingForGroundToLoad(CClientEntity& Entity, bool& bWaitingForGroundToLoad);
 
+    static bool SetObjectCustomCollision(CClientEntity& Entity, CClientColModel* pColModel);
+
     // Radio funcs
     static bool SetRadioChannel(unsigned char& ucChannel);
     static bool GetRadioChannel(unsigned char& ucChannel);

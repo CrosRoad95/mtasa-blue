@@ -440,7 +440,7 @@ int CLuaEngineDefs::EngineReplaceCOL(lua_State* luaVM)
         {
             if (pEntity)
             {
-                if(g_pCore->GetCustomCollision()->SetObjectCollision(pEntity->GetGameEntity()->GetInterface(), pCol->GetColModel()->GetInterface()))
+                if (CStaticFunctionDefinitions::SetObjectCustomCollision(*pEntity, pCol))
                 {
                     lua_pushboolean(luaVM, true);
                     return 1;

@@ -142,7 +142,7 @@ public:
         delete pColData->pSuspensionLines;
         delete pColData->pVertices;
         delete pColData->pColTriangles;
-        delete pColData->pColTrianglePlanes;
+        //delete pColData->pColTrianglePlanes;
         delete pColData->pShadowVertices;
         delete pColData->pShadowTriangles;
         delete pColData;
