@@ -90,19 +90,13 @@ DWORD CONTINUE_CWorld_GetIsTouching = 0x005344B6;
 
 CColModelSAInterface* GetCollision(CObject* pObject)
 {
-    CColModelSAInterface* pColModel = g_pCore->GetCustomCollision()->GetCustomCollision(pObject);
+    //g_pCore->GetCustomCollision()->DrawCollisionDebug(pObject);
+
+    CColModelSAInterface* pColModel = g_pCore->GetCustomCollision()->GetCurrentCollision(pObject);
     return pColModel;
 }
 
-typedef struct
-{
-    float left;
-    float bottom;
-    float right;
-    float top;
-} CRect;
-
-bool bGotReplaced = false;
+bool                  bGotReplaced = false;
 CColModelSAInterface* pColModelReplace;
 bool                  bIsObject = false;
 CColModelSAInterface* colModel;
@@ -156,7 +150,6 @@ void _declspec(naked) HOOK_GetIsTouching()
         push    ecx
         push    ecx
         call    GetIsTouching
-        //mov     colModel, eax
         add     esp, 12
         popad
     }

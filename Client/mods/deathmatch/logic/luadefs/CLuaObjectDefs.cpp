@@ -475,6 +475,10 @@ int CLuaObjectDefs::SetObjectCollisionScale(lua_State* luaVM)
     }
     if (!argStream.HasErrors())
     {
+        //vecScale.fX = (float)(((int)(vecScale.fX * 128)) / 128);
+        //vecScale.fY = (float)(((int)(vecScale.fY * 128)) / 128);
+        //vecScale.fZ = (float)(((int)(vecScale.fZ * 128)) / 128);
+
         if (CStaticFunctionDefinitions::SetObjectCollisionScale(*pEntity, vecScale))
         {
             lua_pushboolean(luaVM, true);

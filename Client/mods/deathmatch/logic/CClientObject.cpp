@@ -394,7 +394,7 @@ void CClientObject::SetCollisionScale(const CVector& vecScale)
 {
     if (m_pObject)
     {
-        g_pCore->GetCustomCollision()->SetObjectScale(m_pObject->GetInterface(), m_vecCollisionScale);
+        g_pCore->GetCustomCollision()->SetObjectScale(m_pObject, vecScale);
     }
     m_vecCollisionScale = vecScale;
 }
@@ -540,7 +540,7 @@ void CClientObject::Create()
                 if (m_vecScale.fX != 1.0f || m_vecScale.fY != 1.0f || m_vecScale.fZ != 1.0f)
                     SetScale(m_vecScale);
                 if (m_vecCollisionScale.fX != 1.0f || m_vecCollisionScale.fY != 1.0f || m_vecCollisionScale.fZ != 1.0f)
-                    g_pCore->GetCustomCollision()->SetObjectScale(m_pObject->GetInterface(), m_vecCollisionScale);
+                    g_pCore->GetCustomCollision()->SetObjectScale(m_pObject, m_vecCollisionScale);
                 if (m_pColModelSA != nullptr)
                     g_pCore->GetCustomCollision()->SetObjectCollision(m_pObject->GetInterface(), m_pColModelSA);
                 m_pObject->SetAreaCode(m_ucInterior);
