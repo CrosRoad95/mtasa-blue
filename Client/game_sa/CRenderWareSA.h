@@ -34,6 +34,18 @@ public:
     float boundingSphereRadius;
 };
 
+struct SMaterial
+{
+public:
+    SColor      color;
+    float       ambient;
+    float       diffuse;
+    float       specular;
+    std::string textureName;
+    std::string textureMaskName;
+    int         flags;
+};
+
 struct SFrameGeometry
 {
 public:
@@ -173,6 +185,7 @@ public:
     bool FlushChanged(int16_t usModelId, std::string& frameName);
     RpAtomic* GetAtomicFromFrameName(RwObject* rwObject, std::string& frameName);
     bool      ExportModel(uint16_t usModelId, std::string& outString);
+    bool      GetMaterials(int16_t usModelId, std::vector<SMaterial>& materials);
 
     // CRenderWareSA methods
     RwTexture*          RightSizeTexture(RwTexture* pTexture, uint uiSizeLimit, SString& strError);

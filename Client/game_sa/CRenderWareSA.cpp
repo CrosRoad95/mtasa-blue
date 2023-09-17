@@ -1054,6 +1054,58 @@ bool CRenderWareSA::GetFrameGeometryInfo(RwObject* rwObject, std::string& frameN
     return true;
 }
 
+bool CRenderWareSA::GetMaterials(int16_t usModelId, std::vector<SMaterial>& materials)
+{
+    CModelInfo* pModelInfo = g_pCore->GetGame()->GetModelInfo(usModelId);
+    if (pModelInfo == nullptr)
+        return false;
+
+    RwObject* pRwObject = pModelInfo->GetRwObject();
+
+    if (pRwObject == nullptr)
+        return false;
+
+    if (pRwObject->type == RP_TYPE_ATOMIC)
+    {
+        RpGeometry* pGeometry = reinterpret_cast<RpAtomic*>(pRwObject)->geometry;
+        if (pGeometry == nullptr)
+            return false;
+
+         RpGeometryForAllMaterials(
+            pGeometry,
+            [](RpMaterial* pMaterial, void* pData)
+            {
+                SMaterial material;
+                material.color.R = pMaterial->color.r;
+                material.color.G = pMaterial->color.g;
+                material.color.B = pMaterial->color.b;
+                material.color.A = pMaterial->color.a;
+                material.ambient = pMaterial->lighting.ambient;
+                material.diffuse = pMaterial->lighting.diffuse;
+                material.specular = pMaterial->lighting.specular;
+                material.textureName.assign(pMaterial->texture->name, sizeof(pMaterial->texture->name));
+                material.textureMaskName.assign(pMaterial->texture->mask, sizeof(pMaterial->texture->mask));
+                material.flags = pMaterial->texture->flags;
+                reinterpret_cast<std::vector<SMaterial>*>(pData)->push_back(material);
+                return pMaterial;
+            },
+            &materials);
+    }
+    else
+    {
+        //RpClumpForAllAtomics(
+        //    reinterpret_cast<RpClump*>(pRwObject),
+        //    [](RpAtomic* pAtomic, void* pData)
+        //    {
+        //        reinterpret_cast<std::vector<RpAtomic*>*>(pData)->push_back(pAtomic);
+        //        return true;
+        //    },
+        //    &materials);
+    }
+
+    return true;
+}
+
 RpAtomic* CRenderWareSA::GetAtomicFromFrameName(RwObject* rwObject, std::string& frameName)
 {
     if (rwObject->type == RP_TYPE_ATOMIC)

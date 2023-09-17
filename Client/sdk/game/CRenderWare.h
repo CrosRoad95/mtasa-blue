@@ -27,6 +27,7 @@ struct RwTexture;
 struct RpClump;
 struct SFrameGeometryInfo;
 struct SFrameGeometry;
+struct SMaterial;
 struct RwObject;
 
 typedef CShaderItem CSHADERDUMMY;
@@ -130,4 +131,5 @@ public:
     virtual bool QueueSetVertexColorUpdate(int16_t usModelId, std::string& frameName, int vertexIndex, SColor color) = 0;
     virtual bool FlushChanged(int16_t usModelId, std::string& frameName) = 0;
     virtual bool ExportModel(uint16_t usModelId, std::string& outString) = 0;
+    virtual bool GetMaterials(int16_t usModelId, std::vector<SMaterial>& materials) = 0;
 };

@@ -101,7 +101,7 @@ std::unordered_map<std::string, std::variant<float, CVector>> EngineModelGetFram
     return frameGeometryInfo;
 }
 
-std::unordered_map < std::string, std::variant<std::vector<CVectorAsTable>, std::vector<int>>> EngineModelGetFrameGeometry(uint16_t usModel, std::string frameName)
+std::unordered_map<std::string, std::variant<std::vector<CVectorAsTable>, std::vector<int>>> EngineModelGetFrameGeometry(uint16_t usModel, std::string frameName)
 {
     CModelInfo* pModelInfo = g_pGame->GetModelInfo(usModel);
     if (pModelInfo == nullptr)
@@ -139,6 +139,29 @@ std::variant<bool, std::string> EngineExportModel(uint16_t usModel)
     std::string data;
     if (g_pGame->GetRenderWare()->ExportModel(usModel, data))
         return data;
+    return false;
+}
+
+std::variant<bool, std::vector<std::unordered_map<std::string, std::variant<double, std::string>>>> EngineModelGetMaterials(uint16_t usModel)
+{
+    std::vector<SMaterial> materials;
+    if (g_pGame->GetRenderWare()->GetMaterials(usModel, materials))
+    {
+        std::vector<std::unordered_map<std::string, std::variant<double, std::string>>> results;
+        for (auto const& material : materials)
+        {
+            std::unordered_map<std::string, std::variant<double, std::string>> result;
+            result["color"] = material.color.ulARGB;
+            result["ambient"] = material.ambient;
+            result["diffuse"] = material.diffuse;
+            result["specular"] = material.specular;
+            result["textureMaskName"] = material.textureMaskName;
+            result["textureName"] = material.textureName;
+            result["flags"] = material.flags;
+            results.push_back(result);
+        }
+        return results;
+    }
     return false;
 }
 
@@ -215,6 +238,7 @@ void CLuaEngineDefs::LoadFunctions()
         {"engineModelFrameSetVertexColor", ArgumentParser<EngineModelFrameSetVertexColor>},
         {"engineModelFlushChanges", ArgumentParser<EngineModelFlushChanges>},
         {"engineExportModel", ArgumentParser<EngineExportModel>},
+        {"engineModelGetMaterials", ArgumentParser<EngineModelGetMaterials>},
         
         {"engineRequestTXD", ArgumentParser<EngineRequestTXD>},
         {"engineFreeTXD", ArgumentParser<EngineFreeTXD>},
