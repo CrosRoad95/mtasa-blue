@@ -13,6 +13,7 @@
 #include "CBikeSA.h"
 #include "CBmxSA.h"
 #include "CBoatSA.h"
+#include "CBuildingSA.h"
 #include "CGameSA.h"
 #include "CHeliSA.h"
 #include "CMonsterTruckSA.h"
@@ -24,6 +25,8 @@
 #include "CTrainSA.h"
 #include "CWorldSA.h"
 #include "CKeyGenSA.h"
+#include "CFileLoaderSA.h"
+#include "CPtrNodeSingleListSA.h"
 
 extern CGameSA* pGame;
 
@@ -676,7 +679,7 @@ DWORD CPoolsSA::GetPedPoolIndex(std::uint8_t* pInterface)
     {
         return MAX_PEDS;
     }
-    return ((pInterface - pTheObjects) / dwAlignedSize);
+    return ((pInterface - pTheObjects) / dwAlignedSize); 
 }
 
 DWORD CPoolsSA::GetVehiclePoolIndex(std::uint8_t* pInterface)

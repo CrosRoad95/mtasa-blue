@@ -78,31 +78,59 @@ bool CClientModel::Allocate(ushort usParentID)
     return false;
 }
 
+// You can call it only in destructor for DFF.
 bool CClientModel::Deallocate()
 {
     if (!m_bAllocatedByUs)
         return false;
+
+    SetParentResource(nullptr);
+
     CModelInfo* pModelInfo = g_pGame->GetModelInfo(m_iModelID, true);
     if (!pModelInfo || !pModelInfo->IsValid())
         return false;
 
-    SetParentResource(nullptr);
+    if (m_eModelType != eClientModelType::TXD)
+    {
+        // Remove model info
+        pModelInfo->DeallocateModel();
+    }
+
+    return true;
+}
+
+void CClientModel::RestoreEntitiesUsingThisModel()
+{
+    CModelInfo* pModelInfo = g_pGame->GetModelInfo(m_iModelID, true);
+    if (!pModelInfo || !pModelInfo->IsValid())
+        return;
 
     switch (m_eModelType)
     {
         case eClientModelType::PED:
         case eClientModelType::OBJECT:
+        case eClientModelType::CLUMP:
+        case eClientModelType::TIMED_OBJECT:
         case eClientModelType::VEHICLE:
-            return DeallocateDFF(pModelInfo);
+            RestoreDFF(pModelInfo);
+            return;
         case eClientModelType::TXD:
-            return DeallocateTXD(pModelInfo);
+            RestoreTXD(pModelInfo);
+            return;
         default:
-            return false;
+            return;
     }
 }
 
-bool CClientModel::DeallocateDFF(CModelInfo* pModelInfo)
+void CClientModel::RestoreDFF(CModelInfo* pModelInfo)
 {
+    auto callElementChangeEvent = [](auto &element, unsigned short usParentID, auto modelId) {
+        CLuaArguments Arguments;
+        Arguments.PushNumber(modelId);
+        Arguments.PushNumber(usParentID);
+        element.CallEvent("onClientElementModelChange", Arguments, true);
+    };
+
     auto unloadModelsAndCallEvents = [&](auto iterBegin, auto iterEnd, unsigned short usParentID, auto setElementModelLambda) {
         for (auto iter = iterBegin; iter != iterEnd; iter++)
         {
@@ -116,10 +144,21 @@ bool CClientModel::DeallocateDFF(CModelInfo* pModelInfo)
 
             setElementModelLambda(element);
 
-            CLuaArguments Arguments;
-            Arguments.PushNumber(m_iModelID);
-            Arguments.PushNumber(usParentID);
-            element.CallEvent("onClientElementModelChange", Arguments, true);
+            callElementChangeEvent(element, usParentID, m_iModelID);
+        }
+    };
+
+    auto unloadModelsAndCallEventsNonStreamed = [&](auto iterBegin, auto iterEnd, unsigned short usParentID, auto setElementModelLambda)
+    {
+        for (auto iter = iterBegin; iter != iterEnd; iter++)
+        {
+            auto& element = **iter;
+
+            if (element.GetModel() != m_iModelID)
+                continue;
+
+            setElementModelLambda(element);
+            callElementChangeEvent(element, usParentID, m_iModelID);
         }
     };
 
@@ -147,6 +186,12 @@ bool CClientModel::DeallocateDFF(CModelInfo* pModelInfo)
 
             unloadModelsAndCallEvents(pPickupManager->IterBegin(), pPickupManager->IterEnd(), usParentID, [=](auto& element) { element.SetModel(usParentID); });
 
+            // Restore buildings
+            CClientBuildingManager* pBuildingsManager = g_pClientGame->GetManager()->GetBuildingManager();
+            auto&                   buildingsList = pBuildingsManager->GetBuildings();
+            unloadModelsAndCallEventsNonStreamed(buildingsList.begin(), buildingsList.end(), usParentID,
+                                      [=](auto& element) { element.SetModel(usParentID); });
+
             // Restore COL
             g_pClientGame->GetManager()->GetColModelManager()->RestoreModel(m_iModelID);
             break;
@@ -164,8 +209,6 @@ bool CClientModel::DeallocateDFF(CModelInfo* pModelInfo)
 
     // Restore DFF/TXD
     g_pClientGame->GetManager()->GetDFFManager()->RestoreModel(m_iModelID);
-
-    return true;
 }
 
 bool CClientModel::AllocateTXD(std::string &strTxdName)
@@ -179,7 +222,7 @@ bool CClientModel::AllocateTXD(std::string &strTxdName)
     return false;
 }
 
-bool CClientModel::DeallocateTXD(CModelInfo* pModelInfo)
+void CClientModel::RestoreTXD(CModelInfo* pModelInfo)
 {
     uint uiTextureDictonarySlotID = pModelInfo->GetModel() - MAX_MODEL_DFF_ID;
 
@@ -193,6 +236,4 @@ bool CClientModel::DeallocateTXD(CModelInfo* pModelInfo)
 
     g_pGame->GetPools()->RemoveTextureDictonarySlot(uiTextureDictonarySlotID);
     g_pGame->GetStreaming()->SetStreamingInfo(pModelInfo->GetModel(), 0, 0, 0, -1);
-
-    return true;
 }
