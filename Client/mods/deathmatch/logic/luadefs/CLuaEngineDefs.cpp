@@ -238,8 +238,13 @@ void CLuaEngineDefs::LoadFunctions()
         {"engineStreamingRestoreMemorySize", ArgumentParser<EngineStreamingRestoreMemorySize>},
         {"engineStreamingSetBufferSize", ArgumentParser<EngineStreamingSetBufferSize>},
         {"engineStreamingGetBufferSize", ArgumentParser<EngineStreamingGetBufferSize>},
-        {"engineStreamingSetModelCacheLimits", ArgumentParser<EngineStreamingSetModelCacheLimits>},
-        {"engineStreamingRestoreBufferSize", ArgumentParser<EngineStreamingRestoreBufferSize>},
+
+        {"engineRequestTXD", ArgumentParser<EngineRequestTXD>},
+        {"engineFreeTXD", ArgumentParser<EngineFreeTXD>},
+        {"engineGetPoolCapacity", ArgumentParser<EngineGetPoolCapacity>},
+        {"engineGetPoolDefaultCapacity", ArgumentParser<EngineGetPoolDefaultCapacity>},
+        {"engineGetPoolUsedCapacity", ArgumentParser<EngineGetPoolUsedCapacity>},
+        {"engineSetPoolCapacity", ArgumentParser<EngineSetPoolCapacity>},
 
         {"engineModelGetFramesHierarchy", ArgumentParser<EngineModelGetFramesHierarchy>},
         {"engineModelGetFrameGeometryInfo", ArgumentParser<EngineModelGetFrameGeometryInfo>},
@@ -249,10 +254,6 @@ void CLuaEngineDefs::LoadFunctions()
         {"engineModelFlushChanges", ArgumentParser<EngineModelFlushChanges>},
         {"engineExportModel", ArgumentParser<EngineExportModel>},
         {"engineModelGetMaterials", ArgumentParser<EngineModelGetMaterials>},
-        
-        {"engineRequestTXD", ArgumentParser<EngineRequestTXD>},
-        {"engineFreeTXD", ArgumentParser<EngineFreeTXD>},
-        
         // CLuaCFunctions::AddFunction ( "engineReplaceMatchingAtomics", EngineReplaceMatchingAtomics );
         // CLuaCFunctions::AddFunction ( "engineReplaceWheelAtomics", EngineReplaceWheelAtomics );
         // CLuaCFunctions::AddFunction ( "enginePositionAtomic", EnginePositionAtomic );
@@ -2571,4 +2572,53 @@ bool CLuaEngineDefs::EngineFreeTXD(uint txdID)
 {
     std::shared_ptr<CClientModel> pModel = m_pManager->GetModelManager()->FindModelByID(MAX_MODEL_DFF_ID + txdID);
     return pModel && pModel->Deallocate();
+}
+
+size_t CLuaEngineDefs::EngineGetPoolCapacity(ePools pool)
+{
+    return g_pGame->GetPools()->GetPoolCapacity(pool);
+}
+
+size_t CLuaEngineDefs::EngineGetPoolDefaultCapacity(ePools pool)
+{
+    return g_pGame->GetPools()->GetPoolDefaultModdedCapacity(pool);
+}
+
+size_t CLuaEngineDefs::EngineGetPoolUsedCapacity(ePools pool)
+{
+    return g_pGame->GetPools()->GetNumberOfUsedSpaces(pool);
+}
+
+bool CLuaEngineDefs::EngineSetPoolCapacity(lua_State* luaVM, ePools pool, size_t newSize)
+{
+    size_t minSize = g_pGame->GetPools()->GetPoolDefaultModdedCapacity(pool);
+    if (newSize < minSize)
+    {
+        m_pScriptDebugging->LogWarning(luaVM, "Cannot set the pool capacity to less than the default capacity.");
+        return false;
+    }
+
+    minSize = g_pGame->GetPools()->GetNumberOfUsedSpaces(pool);
+    if (newSize < minSize)
+    {
+        m_pScriptDebugging->LogWarning(luaVM, "Cannot set the pool capacity to less than the used capacity.");
+        return false;
+    }
+
+    switch (pool)
+    {
+        case ePools::BUILDING_POOL:
+        {
+            m_pBuildingManager->DestroyAllForABit();
+
+            bool success = g_pGame->SetBuildingPoolSize(newSize);
+
+            m_pBuildingManager->RestoreDestroyed();
+
+            return success;
+        }
+        default:
+            throw std::invalid_argument("Can not change this pool capacity");
+    }
+    return true;
 }
