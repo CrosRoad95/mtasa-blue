@@ -1033,7 +1033,10 @@ void CRenderWareSA::GetFrameHierarchy(RwObject* rwObject, std::vector<std::vecto
 {
     if (RpGetFrame(rwObject) == nullptr)
         return;
-    RwFrameDump(RpGetFrame(rwObject), frames);
+
+    RwFrame* rootFrame = RpGetFrame(rwObject);
+    frames.push_back({rootFrame->szName, rootFrame->szName});
+    RwFrameDump(rootFrame, frames);
 }
 
 bool CRenderWareSA::GetFrameGeometryInfo(RwObject* rwObject, std::string& frameName, SFrameGeometryInfo& info)
@@ -1136,7 +1139,9 @@ bool CRenderWareSA::GetFrameGeometry(RwObject* rwObject, std::string& frameName,
     if (pGeomtry == nullptr)
         return false;
 
-    info.vertices = std::move(std::vector<CVector>((CVector*)pGeomtry->morph_target->verts, (CVector*)pGeomtry->morph_target->verts + pGeomtry->vertices_size));
+    CVector* begin = reinterpret_cast<CVector*>(pGeomtry->morph_target->verts);
+    info.vertices = std::move(std::vector<CVector>(begin, begin + pGeomtry->vertices_size));
+
     info.triangles.reserve(pGeomtry->triangles_size * 3);
     for (int i = 0; i < pGeomtry->triangles_size; i++)
     {
@@ -1145,6 +1150,48 @@ bool CRenderWareSA::GetFrameGeometry(RwObject* rwObject, std::string& frameName,
         info.triangles.push_back(triangle.verts[1]);
         info.triangles.push_back(triangle.verts[2]);
     }
+
+    for (int i = 0; i < pGeomtry->texcoords_size; i++)
+    {
+        std::vector<CVector2D> coords;
+        coords.reserve(pGeomtry->triangles_size);
+        for (int t = 0; t < pGeomtry->triangles_size; t++)
+        {
+            RwTextureCoordinates coord = pGeomtry->texcoords[i][t];
+            coords.push_back(CVector2D(coord.u, coord.v));
+        }
+
+        info.texCoords.push_back(coords);
+    }
+
+    uint32_t   original_ms_extraVertColourPluginOffset = *(uint32_t*)(void*)0x8D12BC;
+    const auto extraVertColors = (VertexColorPlugin*)((unsigned char*)pGeomtry + original_ms_extraVertColourPluginOffset);
+
+    for (int i = 0; i < pGeomtry->vertices_size; i++)
+    {
+        RwRGBA rwColor = extraVertColors->DayColors[i];
+        SColor  color;
+        color.R = rwColor.red;
+        color.G = rwColor.green;
+        color.B = rwColor.blue;
+        color.A = rwColor.alpha;
+        info.dayColor.push_back(color);
+    }
+
+    if (extraVertColors->NightColors)
+    {
+        for (int i = 0; i < pGeomtry->vertices_size; i++)
+        {
+            RwRGBA rwColor = extraVertColors->NightColors[i];
+            SColor  color;
+            color.R = rwColor.red;
+            color.G = rwColor.green;
+            color.B = rwColor.blue;
+            color.A = rwColor.alpha;
+            info.nightColor.push_back(color);
+        }
+    }
+
     return true;
 }
 
@@ -1178,7 +1225,7 @@ bool CRenderWareSA::QueueSetVertexPositionUpdate(int16_t usModelId, std::string&
 }
 
 
-bool CRenderWareSA::QueueSetVertexColorUpdate(int16_t usModelId, std::string& frameName, int vertexIndex, SColor color)
+bool CRenderWareSA::QueueSetVertexColorUpdate(int16_t usModelId, std::string& frameName, int vertexIndex, SColor dayColor, SColor nightColor)
 {
     CModelInfo* pModelInfo = g_pCore->GetGame()->GetModelInfo(usModelId);
     if (pModelInfo == nullptr)
@@ -1203,8 +1250,18 @@ bool CRenderWareSA::QueueSetVertexColorUpdate(int16_t usModelId, std::string& fr
             pGeometryUpdate = m_mapGeometryUpdateQueue.find(usModelId)->second;
     }
 
-    if (pGeometryUpdate != nullptr)
-        pGeometryUpdate->VertexSetColor(frameName, vertexIndex, color);
+    if (pGeometryUpdate == nullptr)
+        return false;
+
+    RpGeometry* pGeometry = pAtomic->geometry;
+    if (pGeometry == nullptr)
+        return false;
+
+    if (vertexIndex < 0 || pGeometry->vertices_size < vertexIndex)
+        return false;
+
+    pGeometryUpdate->VertexSetColor(frameName, vertexIndex, dayColor, nightColor);
+    return true;
 }
 
 bool CRenderWareSA::FlushChanged(int16_t usModelId, std::string& frameName)
@@ -1238,15 +1295,17 @@ void CGeometryUpdate::VertexSetPosition(std::string& frameName, int vertexIndex,
     m_mapGeometryFrameUpdate[frameName].m_vecVertexSetPosition.push_back(SGeometryVertexSetPosition{vertexIndex, position});
 }
 
-void CGeometryUpdate::VertexSetColor(std::string& frameName, int vertexIndex, SColor color)
+void CGeometryUpdate::VertexSetColor(std::string& frameName, int vertexIndex, SColor dayColor, SColor nightColor)
 {
     if (m_mapGeometryFrameUpdate.find(frameName) == m_mapGeometryFrameUpdate.end())
         m_mapGeometryFrameUpdate[frameName] = {};
-    m_mapGeometryFrameUpdate[frameName].m_vecVertexSetColor.push_back(SGeometryVertexSetColor{vertexIndex, color});
+    m_mapGeometryFrameUpdate[frameName].m_vecVertexSetColor.push_back(SGeometryVertexSetColor{vertexIndex, dayColor, nightColor});
 }
 
 bool CGeometryUpdate::FlushChanged(RpGeometry* pGeometry, std::string& frameName)
 {
+    if (pGeometry == nullptr)
+        return false;
     if (m_mapGeometryFrameUpdate.find(frameName) == m_mapGeometryFrameUpdate.end())
         return false;
 
@@ -1258,17 +1317,42 @@ bool CGeometryUpdate::FlushChanged(RpGeometry* pGeometry, std::string& frameName
         vertex->y = setVertexPosition.position.fY;
         vertex->z = setVertexPosition.position.fZ;
     }
-    // geometry->numVertices
+
+    float (*getDayNightBalance)() = reinterpret_cast<float (*)()>(0x6FAB30);
+    float dayNightBalance = getDayNightBalance();
+
+    auto const vertexColorPlugin = pGeometry->GetVertexColorPlugin();
     for (auto const& setVertexColor : m_mapGeometryFrameUpdate[frameName].m_vecVertexSetColor)
     {
         RwColor* color = &pGeometry->colors[setVertexColor.vertexIndex];
-        color->r = setVertexColor.color.R;
-        color->g = setVertexColor.color.G;
-        color->b = setVertexColor.color.B;
-        color->a = setVertexColor.color.A;
+        color->r = Lerp(setVertexColor.dayColor.R, dayNightBalance, setVertexColor.nightColor.R);
+        color->g = Lerp(setVertexColor.dayColor.G, dayNightBalance, setVertexColor.nightColor.G);
+        color->b = Lerp(setVertexColor.dayColor.B, dayNightBalance, setVertexColor.nightColor.B);
+        color->a = Lerp(setVertexColor.dayColor.A, dayNightBalance, setVertexColor.nightColor.A);
+
+        RwRGBA* dayColor = &vertexColorPlugin->DayColors[setVertexColor.vertexIndex];
+        dayColor->red = setVertexColor.dayColor.R;
+        dayColor->green = setVertexColor.dayColor.G;
+        dayColor->blue = setVertexColor.dayColor.B;
+        dayColor->alpha = setVertexColor.dayColor.A;
+        if (vertexColorPlugin->NightColors)
+        {
+            RwRGBA* nightColor = &vertexColorPlugin->NightColors[setVertexColor.vertexIndex];
+            nightColor->red = setVertexColor.nightColor.R;
+            nightColor->green = setVertexColor.nightColor.G;
+            nightColor->blue = setVertexColor.nightColor.B;
+            nightColor->alpha = setVertexColor.nightColor.A;
+        }
     }
-    m_mapGeometryFrameUpdate[frameName].m_vecVertexSetColor.clear();
+
     RpGeometryUnlock(pGeometry);
+
+    if (!m_mapGeometryFrameUpdate[frameName].m_vecVertexSetColor.empty())
+    {
+        //void (*update)() = reinterpret_cast<void (*)()>(0x5D8050);
+        void (*update)() = reinterpret_cast<void (*)()>(0x5D7F80);
+        update();
+    }
 }
 
 typedef uint32_t(__cdecl* RpGeometryRegisterPluginStream_t)(int pluginID, void* readBC, void* writeCB, void* getSizeCB);

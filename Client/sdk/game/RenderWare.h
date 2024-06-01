@@ -200,6 +200,20 @@ enum RpLightFlags
     LIGHT_FLAGS_LAST = RW_STRUCT_ALIGN
 };
 
+struct RwRGBA
+{
+    unsigned char red;   /**< red component */
+    unsigned char green; /**< green component */
+    unsigned char blue;  /**< blue component */
+    unsigned char alpha; /**< alpha component */
+};
+
+struct VertexColorPlugin
+{                                               // AKA `gtaVertexColorPlugin`
+    RwRGBA *NightColors, *DayColors;            // heap allocated
+    float   Intensity;
+};
+
 // RenderWare/plugin base types
 struct RwObject
 {
@@ -430,6 +444,13 @@ struct RpGeometry
     void*                 unknown2;
     void*                 info;
     RpMorphTarget*        morph_target;
+
+    VertexColorPlugin* GetVertexColorPlugin()
+    {
+        uint32_t   original_ms_extraVertColourPluginOffset = *(uint32_t*)(void*)0x8D12BC;
+        auto extraVertColors = (VertexColorPlugin*)((unsigned char*)this + original_ms_extraVertColourPluginOffset);
+        return extraVertColors;
+    }
 };
 
 inline auto rwObjectGetParent(RwObject* o) {

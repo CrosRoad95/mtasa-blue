@@ -128,7 +128,7 @@ public:
     virtual bool GetFrameGeometryInfo(RwObject* rwObject, std::string& frameName, SFrameGeometryInfo& info) = 0;
     virtual bool GetFrameGeometry(RwObject* rwObject, std::string& frameName, SFrameGeometry& info) = 0;
     virtual bool QueueSetVertexPositionUpdate(int16_t usModelId, std::string& frameName, int vertexIndex, CVector position) = 0;
-    virtual bool QueueSetVertexColorUpdate(int16_t usModelId, std::string& frameName, int vertexIndex, SColor color) = 0;
+    virtual bool QueueSetVertexColorUpdate(int16_t usModelId, std::string& frameName, int vertexIndex, SColor dayColor, SColor nightColor) = 0;
     virtual bool FlushChanged(int16_t usModelId, std::string& frameName) = 0;
     virtual bool ExportModel(uint16_t usModelId, std::string& outString) = 0;
     virtual bool GetMaterials(int16_t usModelId, std::vector<SMaterial>& materials) = 0;

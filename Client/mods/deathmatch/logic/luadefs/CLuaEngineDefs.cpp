@@ -104,7 +104,8 @@ std::unordered_map<std::string, std::variant<float, CVector>> EngineModelGetFram
     return frameGeometryInfo;
 }
 
-std::unordered_map<std::string, std::variant<std::vector<CVectorAsTable>, std::vector<int>>> EngineModelGetFrameGeometry(uint16_t usModel, std::string frameName)
+std::unordered_map<std::string, std::variant<std::vector<CVectorAsTable>, std::vector<int>, int, std::vector<std::vector<CVector2D>>, std::vector<SColor>>>
+EngineModelGetFrameGeometry(uint16_t usModel, std::string frameName)
 {
     CModelInfo* pModelInfo = g_pGame->GetModelInfo(usModel);
     if (pModelInfo == nullptr)
@@ -115,9 +116,13 @@ std::unordered_map<std::string, std::variant<std::vector<CVectorAsTable>, std::v
 
     SFrameGeometry info;
     g_pGame->GetRenderWare()->GetFrameGeometry(pModelInfo->GetRwObject(), frameName, info);
-    std::unordered_map<std::string, std::variant<std::vector<CVectorAsTable>, std::vector<int>>> frameGeometry;
+    std::unordered_map<std::string, std::variant<std::vector<CVectorAsTable>, std::vector<int>, int, std::vector<std::vector<CVector2D>>, std::vector<SColor>>> frameGeometry;
     frameGeometry["vertices"] = *reinterpret_cast<std::vector<CVectorAsTable>*>(&info.vertices);
     frameGeometry["triangles"] = info.triangles;
+    frameGeometry["flags"] = info.flags;
+    frameGeometry["uv"] = info.texCoords;
+    frameGeometry["dayColor"] = info.dayColor;
+    frameGeometry["nightColor"] = info.nightColor;
     return frameGeometry;
 }
 
@@ -127,9 +132,9 @@ bool EngineModelFrameSetVertexPosition(uint16_t usModel, std::string frameName, 
                                                                   vertexPosition);
 }
 
-bool EngineModelFrameSetVertexColor(uint16_t usModel, std::string frameName, int vertexIndex, SColor color)
+bool EngineModelFrameSetVertexColor(uint16_t usModel, std::string frameName, int vertexIndex, SColor dayColor, SColor nightColor)
 {
-    return g_pGame->GetRenderWare()->QueueSetVertexColorUpdate(usModel, frameName, vertexIndex, color);
+    return g_pGame->GetRenderWare()->QueueSetVertexColorUpdate(usModel, frameName, vertexIndex, dayColor, nightColor);
 }
 
 bool EngineModelFlushChanges(uint16_t usModel, std::string frameName)
@@ -235,6 +240,7 @@ void CLuaEngineDefs::LoadFunctions()
         {"engineStreamingGetBufferSize", ArgumentParser<EngineStreamingGetBufferSize>},
         {"engineStreamingSetModelCacheLimits", ArgumentParser<EngineStreamingSetModelCacheLimits>},
         {"engineStreamingRestoreBufferSize", ArgumentParser<EngineStreamingRestoreBufferSize>},
+
         {"engineModelGetFramesHierarchy", ArgumentParser<EngineModelGetFramesHierarchy>},
         {"engineModelGetFrameGeometryInfo", ArgumentParser<EngineModelGetFrameGeometryInfo>},
         {"engineModelGetFrameGeometry", ArgumentParser<EngineModelGetFrameGeometry>},

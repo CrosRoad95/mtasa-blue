@@ -49,8 +49,12 @@ public:
 struct SFrameGeometry
 {
 public:
-    std::vector<CVector> vertices;
-    std::vector<int> triangles;
+    int                                 flags;
+    std::vector<CVector>                vertices;
+    std::vector<int>                    triangles;
+    std::vector<SColor>                 dayColor;
+    std::vector<SColor>                 nightColor;
+    std::vector<std::vector<CVector2D>> texCoords;
 };
 
 struct SGeometryVertexSetPosition
@@ -64,7 +68,8 @@ struct SGeometryVertexSetColor
 {
 public:
     int vertexIndex;
-    SColor color;
+    SColor dayColor;
+    SColor nightColor;
 };
 
 class CGeometryFrameUpdate
@@ -78,7 +83,7 @@ class CGeometryUpdate
 {
 public:
     void VertexSetPosition(std::string& frameName, int vertexIndex, CVector position);
-    void VertexSetColor(std::string& frameName, int vertexIndex, SColor color);
+    void VertexSetColor(std::string& frameName, int vertexIndex, SColor dayColor, SColor nightColor);
     bool FlushChanged(RpGeometry* pGeometry, std::string& frameName);
 
 private:
@@ -181,7 +186,7 @@ public:
     bool GetFrameGeometryInfo(RwObject* rwObject, std::string& frameName, SFrameGeometryInfo& info);
     bool GetFrameGeometry(RwObject* rwObject, std::string& frameName, SFrameGeometry& info);
     bool QueueSetVertexPositionUpdate(int16_t usModelId, std::string& frameName, int vertexIndex, CVector position);
-    bool QueueSetVertexColorUpdate(int16_t usModelId, std::string& frameName, int vertexIndex, SColor color);
+    bool QueueSetVertexColorUpdate(int16_t usModelId, std::string& frameName, int vertexIndex, SColor dayColor, SColor nightColor);
     bool FlushChanged(int16_t usModelId, std::string& frameName);
     RpAtomic* GetAtomicFromFrameName(RwObject* rwObject, std::string& frameName);
     bool      ExportModel(uint16_t usModelId, std::string& outString);

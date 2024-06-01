@@ -305,6 +305,7 @@ auto CWorldSA::ProcessLineAgainstMesh(CEntitySAInterface* targetEntity, CVector 
         CVector             originOS, endOS, dirOS;            //< Line origin, end and dir [in object space]
         CMatrix             entMat, entInvMat;                 //< The hit entity's matrix, and it's inverse
         RpTriangle*         hitTri{};                          //< The triangle hit
+        int                 hitTriIndex{};                     //< The triangle hit id
         RpAtomic*           hitAtomic{};                       //< The atomic of the hit triangle's geometry
         RpGeometry*         hitGeo{};                          //< The geometry of the hit triangle
         CVector             hitBary{};                         //< Barycentric coordinates [on the hit triangle] of the hit
@@ -401,6 +402,7 @@ auto CWorldSA::ProcessLineAgainstMesh(CEntitySAInterface* targetEntity, CVector 
                     c->hitGeo = geo;
                     c->hitAtomic = a;
                     c->hitTri = tri;
+                    c->hitTriIndex = i;
                     c->hitBary = hitBary;
                     c->hitPosOS = localToObjTransform.TransformVector(hitPos);            // Transform back into object space
                 }
@@ -445,6 +447,11 @@ auto CWorldSA::ProcessLineAgainstMesh(CEntitySAInterface* targetEntity, CVector 
 
         // Get hit position in world space
         ret.hitPos = c.entMat.TransformVector(c.hitPosOS);
+
+        ret.triangleIndex = c.hitTriIndex;
+        ret.vertexIndices[0] = c.hitTri->verts[0];
+        ret.vertexIndices[1] = c.hitTri->verts[1];
+        ret.vertexIndices[2] = c.hitTri->verts[2];
     }
 
     return ret;

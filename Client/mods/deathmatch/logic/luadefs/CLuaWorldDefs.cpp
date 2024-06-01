@@ -231,7 +231,9 @@ int CLuaWorldDefs::GetRoofPosition(lua_State* luaVM)
     return 1;
 }
 
-std::variant<bool, CLuaMultiReturn<bool, float, float, const char*, const char*, float, float, float>> CLuaWorldDefs::ProcessLineAgainstMesh(CClientEntity* e, CVector start, CVector end) {
+std::variant<bool, CLuaMultiReturn<bool, float, float, const char*, const char*, float, float, float, int, int, int, int>>
+CLuaWorldDefs::ProcessLineAgainstMesh(CClientEntity* e, CVector start, CVector end)
+{
     const auto ge = e->GetGameEntity();
     if (!ge) {
         // Element likely not streamed in, and such
@@ -242,7 +244,8 @@ std::variant<bool, CLuaMultiReturn<bool, float, float, const char*, const char*,
     if (!matInfo.valid) {
         return { false }; // No hit
     }
-    return CLuaMultiReturn<bool, float, float, const char*, const char*, float, float, float>{
+    
+    return CLuaMultiReturn<bool, float, float, const char*, const char*, float, float, float, int, int, int, int>{
         true,
 
         matInfo.uv.fX,
@@ -254,6 +257,11 @@ std::variant<bool, CLuaMultiReturn<bool, float, float, const char*, const char*,
         matInfo.hitPos.fX,
         matInfo.hitPos.fY,
         matInfo.hitPos.fZ,
+
+        matInfo.triangleIndex,
+        matInfo.vertexIndices[0],
+        matInfo.vertexIndices[1],
+        matInfo.vertexIndices[2],
     };
 }
 

@@ -107,6 +107,7 @@ namespace lua
     inline void Push(lua_State* L, const CLuaVector3D* value) { lua_pushvector(L, *value); }
     inline void Push(lua_State* L, const CLuaVector4D* value) { lua_pushvector(L, *value); }
     inline void Push(lua_State* L, const CLuaMatrix* value) { lua_pushmatrix(L, *value); }
+    inline void Push(lua_State* L, const SColor value) { lua_pushnumber(L, value.ulARGB); }
 
     // Overload for enum types only
     template <typename T>
