@@ -17,7 +17,7 @@
 #include "CCompressedVectorSA.h"
 
 #define FUNC_CColModel_Constructor 0x40FB60
-#define FUNC_CColModel_Destructor 0x40F700
+#define FUNC_CColModel_Destructor  0x40F700
 
 struct CBoxSA
 {
@@ -124,14 +124,6 @@ static_assert(sizeof(CColTrianglePlaneSA) == 0xA, "Invalid size for CColTriangle
 
 struct ColModelFileHeader
 {
-    CVector vecStart;
-    float   fStartSize;
-    CVector vecEnd;
-    float   fEndSize;
-} CColLineSA;
-
-typedef struct
-{
     char  version[4];
     DWORD size;
     char  name[0x18];
@@ -170,6 +162,8 @@ struct CColDataSA
     std::uint32_t        m_numShadowVertices;
     CCompressedVectorSA* m_shadowVertices;
     CColTriangleSA*      m_shadowTriangles;
+
+    int getNumVertices() const { return 0; } // TODO:
 };
 static_assert(sizeof(CColDataSA) == 0x30, "Invalid size for CColDataSA");
 

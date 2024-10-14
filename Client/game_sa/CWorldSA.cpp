@@ -234,12 +234,13 @@ void _declspec(naked) HOOK_FallenCars()
 {
     if (pGame && pGame->IsUnderWorldWarpEnabled())
     {
-        _asm {
+        _asm
+        {
             sub esp, 2Ch
             push ebx
             mov ebx, ds:0B74494h
             jmp CONTINUE_CWorld_FallenCars
-            }
+        }
     }
     else
     {

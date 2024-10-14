@@ -13,6 +13,8 @@
 
 #include "../game_sa/CModelInfoSA.h"
 #include "../game_sa/CEntitySA.h"
+#include "./game/CObject.h"
+
 
 CCustomCollision::CCustomCollision()
 {
@@ -33,98 +35,93 @@ CColModelSAInterface* CCustomCollision::GetOriginalColModel(CEntitySAInterface* 
 
 void CCustomCollision::ScaleCollision(CColModelSAInterface* pColModel, const CVector& scale)
 {
-    pColModel->boundingBox.fRadius *= std::max(scale.fX, std::max(scale.fY, scale.fZ)) * 2;
-    pColModel->boundingBox.vecCenter *= (scale / 2);
-    pColModel->boundingBox.vecMax *= scale;
-    pColModel->boundingBox.vecMin *= scale;
+    pColModel->m_sphere.m_radius *= std::max(scale.fX, std::max(scale.fY, scale.fZ)) * 2;
+    pColModel->m_sphere.m_center *= (scale / 2);
+    pColModel->m_bounds.m_vecMax *= scale;
+    pColModel->m_bounds.m_vecMin *= scale;
 
-    for (int i = 0; i < pColModel->pColData->numColSpheres; i++)
+    for (int i = 0; i < pColModel->m_data->m_numSpheres; i++)
     {
-        pColModel->pColData->pColSpheres[i].fRadius *= scale.fX;
-        pColModel->pColData->pColSpheres[i].vecCenter *= scale;
+        pColModel->m_data->m_spheres[i].m_radius *= scale.fX;
+        pColModel->m_data->m_spheres[i].m_center *= scale;
     }
 
-    for (int i = 0; i < pColModel->pColData->numColBoxes; i++)
+    for (int i = 0; i < pColModel->m_data->m_numBoxes; i++)
     {
-        pColModel->pColData->pColBoxes[i].max *= scale;
-        pColModel->pColData->pColBoxes[i].min *= scale;
+        pColModel->m_data->m_boxes[i].m_vecMax *= scale;
+        pColModel->m_data->m_boxes[i].m_vecMin *= scale;
     }
-    for (int i = 0; i < pColModel->pColData->getNumVertices(); i++)
+    for (int i = 0; i < pColModel->m_data->getNumVertices(); i++)
     {
-        pColModel->pColData->pVertices[i].x *= scale.fX;
-        pColModel->pColData->pVertices[i].y *= scale.fY;
-        pColModel->pColData->pVertices[i].z *= scale.fZ;
+        pColModel->m_data->m_vertices[i].x *= scale.fX;
+        pColModel->m_data->m_vertices[i].y *= scale.fY;
+        pColModel->m_data->m_vertices[i].z *= scale.fZ;
     }
 }
 
 CColModelSAInterface* CCustomCollision::CopyColModel(CColModelSAInterface* pColModel)
 {
     CColModelSAInterface* pInterface = new CColModelSAInterface();
-    pInterface->boundingBox = pColModel->boundingBox;
-    pInterface->level = pColModel->level;
-    memcpy(pInterface->pad, pColModel->pad, sizeof(BYTE) * 2);
-    pInterface->unknownFlags = pColModel->unknownFlags;
-    pInterface->pColData = new CColDataSA();
-    pInterface->pColData->numColSpheres = pColModel->pColData->numColSpheres;
-    pInterface->pColData->numColBoxes = pColModel->pColData->numColBoxes;
-    pInterface->pColData->numColTriangles = pColModel->pColData->numColTriangles;
-    pInterface->pColData->numColLines = pColModel->pColData->numColLines;
-    pInterface->pColData->numShadowTriangles = pColModel->pColData->numShadowTriangles;
-    pInterface->pColData->numShadowVertices = pColModel->pColData->numShadowVertices;
-    pInterface->pColData->flags = pColModel->pColData->flags;
+    pInterface->m_bounds = pColModel->m_bounds;
+    pInterface->m_data = new CColDataSA();
+    pInterface->m_data->m_numSpheres = pColModel->m_data->m_numSpheres;
+    pInterface->m_data->m_numBoxes = pColModel->m_data->m_numBoxes;
+    pInterface->m_data->m_numTriangles = pColModel->m_data->m_numTriangles;
+    pInterface->m_data->m_numSuspensionLines = pColModel->m_data->m_numSuspensionLines;
+    pInterface->m_data->m_numShadowTriangles = pColModel->m_data->m_numShadowTriangles;
+    pInterface->m_data->m_numShadowVertices = pColModel->m_data->m_numShadowVertices;
+    pInterface->m_data->m_flags = pColModel->m_data->m_flags;
 
-    if (pInterface->pColData->numShadowTriangles > 0)
+    if (pInterface->m_data->m_numShadowVertices > 0)
     {
-        pInterface->pColData->pShadowVertices = new CompressedVector[pInterface->pColData->numShadowTriangles];
-        memcpy(pInterface->pColData->pShadowVertices, pInterface->pColData->pShadowVertices,
-               sizeof(CompressedVector) * pInterface->pColData->numShadowTriangles);
+        pInterface->m_data->m_shadowVertices = new CCompressedVectorSA[pInterface->m_data->m_numShadowTriangles];
+        memcpy(pInterface->m_data->m_shadowVertices, pInterface->m_data->m_shadowVertices,
+               sizeof(CCompressedVectorSA) * pInterface->m_data->m_numShadowTriangles);
     }
 
-    if (pInterface->pColData->numShadowTriangles > 0)
+    if (pInterface->m_data->m_numShadowTriangles > 0)
     {
-        pInterface->pColData->pShadowTriangles = new CColTriangleSA[pInterface->pColData->numShadowTriangles];
-        memcpy(pInterface->pColData->pShadowTriangles, pColModel->pColData->pShadowTriangles,
-               sizeof(CColTriangleSA) * pInterface->pColData->numShadowTriangles);
+        pInterface->m_data->m_shadowTriangles = new CColTriangleSA[pInterface->m_data->m_numShadowTriangles];
+        memcpy(pInterface->m_data->m_shadowTriangles, pColModel->m_data->m_shadowTriangles, sizeof(CColTriangleSA) * pInterface->m_data->m_numShadowTriangles);
     }
 
-    if (pInterface->pColData->numColSpheres > 0)
+    if (pInterface->m_data->m_numSpheres > 0)
     {
-        pInterface->pColData->pColSpheres = new CColSphereSA[pInterface->pColData->numColSpheres];
-        memcpy(pInterface->pColData->pColSpheres, pColModel->pColData->pColSpheres, sizeof(CColSphereSA) * pInterface->pColData->numColSpheres);
+        pInterface->m_data->m_spheres = new CColSphereSA[pInterface->m_data->m_numSpheres];
+        memcpy(pInterface->m_data->m_spheres, pColModel->m_data->m_spheres, sizeof(CColSphereSA) * pInterface->m_data->m_numSpheres);
     }
 
-    if (pInterface->pColData->numColBoxes > 0)
+    if (pInterface->m_data->m_numBoxes > 0)
     {
-        pInterface->pColData->pColBoxes = new CColBoxSA[pInterface->pColData->numColBoxes];
-        memcpy(pInterface->pColData->pColBoxes, pColModel->pColData->pColBoxes, sizeof(CColBoxSA) * pInterface->pColData->numColBoxes);
+        pInterface->m_data->m_boxes = new CColBoxSA[pInterface->m_data->m_numBoxes];
+        memcpy(pInterface->m_data->m_boxes, pColModel->m_data->m_boxes, sizeof(CColBoxSA) * pInterface->m_data->m_numBoxes);
     }
 
-    if (pInterface->pColData->numColTriangles > 0)
+    if (pInterface->m_data->m_numTriangles > 0)
     {
-        pInterface->pColData->pColTriangles = new CColTriangleSA[pInterface->pColData->numColTriangles];
-        memcpy(pInterface->pColData->pColTriangles, pColModel->pColData->pColTriangles,
-               sizeof(CColTriangleSA) * pInterface->pColData->numColTriangles);
+        pInterface->m_data->m_triangles = new CColTriangleSA[pInterface->m_data->m_numTriangles];
+        memcpy(pInterface->m_data->m_triangles, pColModel->m_data->m_triangles, sizeof(CColTriangleSA) * pInterface->m_data->m_numTriangles);
     }
 
-    //if (pInterface->pColData->numColTriangles > 0)
+    //if (pInterface->m_data->numColTriangles > 0)
     //{
-    //    pInterface->pColData->pColTrianglePlanes = new CColTrianglePlaneSA[pInterface->pColData->numColTriangles];
-    //    memcpy(pInterface->pColData->pColTrianglePlanes, pColModel->pColData->pColTrianglePlanes,
-    //           sizeof(CColTrianglePlaneSA) * pInterface->pColData->numColTriangles);
+    //    pInterface->m_data->pColTrianglePlanes = new CColTrianglePlaneSA[pInterface->m_data->numColTriangles];
+    //    memcpy(pInterface->m_data->pColTrianglePlanes, pColModel->m_data->pColTrianglePlanes,
+    //           sizeof(CColTrianglePlaneSA) * pInterface->m_data->numColTriangles);
     //}
-    pInterface->pColData->pColTrianglePlanes = nullptr;
+    pInterface->m_data->m_trianglePlanes = nullptr;
 
-    if (pInterface->pColData->numColLines > 0)
+    if (pInterface->m_data->m_numSuspensionLines > 0)
     {
-        pInterface->pColData->pSuspensionLines = new CColLineSA[pInterface->pColData->numColLines];
-        memcpy(pInterface->pColData->pSuspensionLines, pColModel->pColData->pSuspensionLines, sizeof(CColLineSA) * pInterface->pColData->numColLines);
+        pInterface->m_data->m_suspensionLines = new CColLineSA[pInterface->m_data->m_numSuspensionLines];
+        memcpy(pInterface->m_data->m_suspensionLines, pColModel->m_data->m_suspensionLines, sizeof(CColLineSA) * pInterface->m_data->m_numSuspensionLines);
     }
 
-    ushort numVertices = pColModel->pColData->getNumVertices();
+    ushort numVertices = pColModel->m_data->getNumVertices();
     if (numVertices > 0)
     {
-        pInterface->pColData->pVertices = new CompressedVector[numVertices];
-        memcpy(pInterface->pColData->pVertices, pColModel->pColData->pVertices, sizeof(CompressedVector) * numVertices);
+        pInterface->m_data->m_vertices = new CCompressedVectorSA[numVertices];
+        memcpy(pInterface->m_data->m_vertices, pColModel->m_data->m_vertices, sizeof(CCompressedVectorSA) * numVertices);
     }
     return pInterface;
 }
@@ -143,25 +140,24 @@ bool CCustomCollision::SaveOriginalCollision(WORD model)
     return false;
 }
 
-
 void CCustomCollision::DrawCollisionDebug(CObject* pObject)
 {
     CColModelSAInterface* colModel = GetCurrentCollision(pObject);
-    CColDataSA*           pColData = colModel->pColData;
+    CColDataSA*           m_data = colModel->m_data;
 
-    if (pColData == nullptr)
+    if (m_data == nullptr)
         return;
 
     CVector vecPosition = *pObject->GetPosition();
 
-    CVector      bboxMin = colModel->boundingBox.vecMin;
-    CVector      bboxMax = colModel->boundingBox.vecMax;
+    CVector      bboxMin = colModel->m_bounds.m_vecMin;
+    CVector      bboxMax = colModel->m_bounds.m_vecMax;
     unsigned int color = (unsigned int)colModel;            // make color depends on collision
     color |= 0x000000ff;                                    // with alpha 255
 
     // g_pCore->GetGraphics()->DrawLine3DQueued(vecPosition - bboxMin, vecPosition + bboxMax, 10, (unsigned int)colModel,false);
 
-    float fLineWidth = 4.f + pow(colModel->boundingBox.fRadius, 0.5f);
+    float fLineWidth = 4.f + pow(colModel->m_sphere.m_radius, 0.5f);
 
     CVector       trianglePosition[3];
     CVector       posMin;
@@ -170,73 +166,73 @@ void CCustomCollision::DrawCollisionDebug(CObject* pObject)
     CColSphereSA* pColSphere;
     CVector       spherePos;
 
-    for (int i = 0; i < pColData->numColTriangles; i++)
+    for (int i = 0; i < m_data->m_numTriangles; i++)
     {
-        CColTriangleSA* pColTriangle = &pColData->pColTriangles[i];
-        trianglePosition[0] = pColData->pVertices[pColTriangle->v1].getVector() + vecPosition;
-        trianglePosition[1] = pColData->pVertices[pColTriangle->v2].getVector() + vecPosition;
-        trianglePosition[2] = pColData->pVertices[pColTriangle->v3].getVector() + vecPosition;
-        g_pCore->GetGraphics()->DrawLine3DQueued(trianglePosition[0], trianglePosition[1], fLineWidth, color, false);
-        g_pCore->GetGraphics()->DrawLine3DQueued(trianglePosition[1], trianglePosition[2], fLineWidth, color, false);
-        g_pCore->GetGraphics()->DrawLine3DQueued(trianglePosition[2], trianglePosition[0], fLineWidth, color, false);
+        CColTriangleSA* pColTriangle = &m_data->m_triangles[i];
+        trianglePosition[0] = m_data->m_vertices[pColTriangle->m_indices[0]].getVector() + vecPosition;
+        trianglePosition[1] = m_data->m_vertices[pColTriangle->m_indices[1]].getVector() + vecPosition;
+        trianglePosition[2] = m_data->m_vertices[pColTriangle->m_indices[2]].getVector() + vecPosition;
+        g_pCore->GetGraphics()->DrawLine3DQueued(trianglePosition[0], trianglePosition[1], fLineWidth, color);
+        g_pCore->GetGraphics()->DrawLine3DQueued(trianglePosition[1], trianglePosition[2], fLineWidth, color);
+        g_pCore->GetGraphics()->DrawLine3DQueued(trianglePosition[2], trianglePosition[0], fLineWidth, color);
     }
 
-    for (int i = 0; i < pColData->numColBoxes; i++)
+    for (int i = 0; i < m_data->m_numBoxes; i++)
     {
-        pColBox = &pColData->pColBoxes[i];
-        posMin = pColBox->min + vecPosition;
-        posMax = pColBox->max + vecPosition;
+        pColBox = &m_data->m_boxes[i];
+        posMin = pColBox->m_vecMin + vecPosition;
+        posMax = pColBox->m_vecMax + vecPosition;
 
         // vertical lines
-        g_pCore->GetGraphics()->DrawLine3DQueued(CVector(posMin.fX, posMin.fY, posMin.fZ), CVector(posMin.fX, posMin.fY, posMax.fZ), fLineWidth, color, false);
-        g_pCore->GetGraphics()->DrawLine3DQueued(CVector(posMax.fX, posMin.fY, posMin.fZ), CVector(posMax.fX, posMin.fY, posMax.fZ), fLineWidth, color, false);
-        g_pCore->GetGraphics()->DrawLine3DQueued(CVector(posMax.fX, posMax.fY, posMin.fZ), CVector(posMax.fX, posMax.fY, posMax.fZ), fLineWidth, color, false);
-        g_pCore->GetGraphics()->DrawLine3DQueued(CVector(posMin.fX, posMax.fY, posMin.fZ), CVector(posMin.fX, posMax.fY, posMax.fZ), fLineWidth, color, false);
+        g_pCore->GetGraphics()->DrawLine3DQueued(CVector(posMin.fX, posMin.fY, posMin.fZ), CVector(posMin.fX, posMin.fY, posMax.fZ), fLineWidth, color);
+        g_pCore->GetGraphics()->DrawLine3DQueued(CVector(posMax.fX, posMin.fY, posMin.fZ), CVector(posMax.fX, posMin.fY, posMax.fZ), fLineWidth, color);
+        g_pCore->GetGraphics()->DrawLine3DQueued(CVector(posMax.fX, posMax.fY, posMin.fZ), CVector(posMax.fX, posMax.fY, posMax.fZ), fLineWidth, color);
+        g_pCore->GetGraphics()->DrawLine3DQueued(CVector(posMin.fX, posMax.fY, posMin.fZ), CVector(posMin.fX, posMax.fY, posMax.fZ), fLineWidth, color);
 
         // one corner
-        g_pCore->GetGraphics()->DrawLine3DQueued(CVector(posMin.fX, posMin.fY, posMin.fZ), CVector(posMin.fX, posMax.fY, posMin.fZ), fLineWidth, color, false);
-        g_pCore->GetGraphics()->DrawLine3DQueued(CVector(posMin.fX, posMin.fY, posMin.fZ), CVector(posMax.fX, posMin.fY, posMin.fZ), fLineWidth, color, false);
-        g_pCore->GetGraphics()->DrawLine3DQueued(CVector(posMin.fX, posMin.fY, posMax.fZ), CVector(posMin.fX, posMax.fY, posMax.fZ), fLineWidth, color, false);
-        g_pCore->GetGraphics()->DrawLine3DQueued(CVector(posMin.fX, posMin.fY, posMax.fZ), CVector(posMax.fX, posMin.fY, posMax.fZ), fLineWidth, color, false);
+        g_pCore->GetGraphics()->DrawLine3DQueued(CVector(posMin.fX, posMin.fY, posMin.fZ), CVector(posMin.fX, posMax.fY, posMin.fZ), fLineWidth, color);
+        g_pCore->GetGraphics()->DrawLine3DQueued(CVector(posMin.fX, posMin.fY, posMin.fZ), CVector(posMax.fX, posMin.fY, posMin.fZ), fLineWidth, color);
+        g_pCore->GetGraphics()->DrawLine3DQueued(CVector(posMin.fX, posMin.fY, posMax.fZ), CVector(posMin.fX, posMax.fY, posMax.fZ), fLineWidth, color);
+        g_pCore->GetGraphics()->DrawLine3DQueued(CVector(posMin.fX, posMin.fY, posMax.fZ), CVector(posMax.fX, posMin.fY, posMax.fZ), fLineWidth, color);
 
         // second corner
-        g_pCore->GetGraphics()->DrawLine3DQueued(CVector(posMax.fX, posMax.fY, posMin.fZ), CVector(posMin.fX, posMax.fY, posMin.fZ), fLineWidth, color, false);
-        g_pCore->GetGraphics()->DrawLine3DQueued(CVector(posMax.fX, posMax.fY, posMin.fZ), CVector(posMax.fX, posMin.fY, posMin.fZ), fLineWidth, color, false);
-        g_pCore->GetGraphics()->DrawLine3DQueued(CVector(posMax.fX, posMax.fY, posMax.fZ), CVector(posMin.fX, posMax.fY, posMax.fZ), fLineWidth, color, false);
-        g_pCore->GetGraphics()->DrawLine3DQueued(CVector(posMax.fX, posMax.fY, posMax.fZ), CVector(posMax.fX, posMin.fY, posMax.fZ), fLineWidth, color, false);
+        g_pCore->GetGraphics()->DrawLine3DQueued(CVector(posMax.fX, posMax.fY, posMin.fZ), CVector(posMin.fX, posMax.fY, posMin.fZ), fLineWidth, color);
+        g_pCore->GetGraphics()->DrawLine3DQueued(CVector(posMax.fX, posMax.fY, posMin.fZ), CVector(posMax.fX, posMin.fY, posMin.fZ), fLineWidth, color);
+        g_pCore->GetGraphics()->DrawLine3DQueued(CVector(posMax.fX, posMax.fY, posMax.fZ), CVector(posMin.fX, posMax.fY, posMax.fZ), fLineWidth, color);
+        g_pCore->GetGraphics()->DrawLine3DQueued(CVector(posMax.fX, posMax.fY, posMax.fZ), CVector(posMax.fX, posMin.fY, posMax.fZ), fLineWidth, color);
     }
 
-    for (int i = 0; i < pColData->numColSpheres; i++)
+    for (int i = 0; i < m_data->m_numSpheres; i++)
     {
-        pColSphere = &pColData->pColSpheres[i];
-        spherePos = pColSphere->vecCenter + vecPosition;
-        g_pCore->GetGraphics()->DrawWiredSphere(spherePos, pColSphere->fRadius, SColorARGB(255, 0, 0, 255), fLineWidth, 2);
+        pColSphere = &m_data->m_spheres[i];
+        spherePos = pColSphere->m_center + vecPosition;
+        g_pCore->GetGraphics()->DrawWiredSphere(spherePos, pColSphere->m_radius, SColorARGB(255, 0, 0, 255), fLineWidth, 2);
     }
 
     // Bounding Box
-    posMin = colModel->boundingBox.vecMin + vecPosition;
-    posMax = colModel->boundingBox.vecMax + vecPosition;
+    posMin = colModel->m_bounds.m_vecMin + vecPosition;
+    posMax = colModel->m_bounds.m_vecMax + vecPosition;
 
     // vertical lines
-    g_pCore->GetGraphics()->DrawLine3DQueued(CVector(posMin.fX, posMin.fY, posMin.fZ), CVector(posMin.fX, posMin.fY, posMax.fZ), fLineWidth, color, false);
-    g_pCore->GetGraphics()->DrawLine3DQueued(CVector(posMax.fX, posMin.fY, posMin.fZ), CVector(posMax.fX, posMin.fY, posMax.fZ), fLineWidth, color, false);
-    g_pCore->GetGraphics()->DrawLine3DQueued(CVector(posMax.fX, posMax.fY, posMin.fZ), CVector(posMax.fX, posMax.fY, posMax.fZ), fLineWidth, color, false);
-    g_pCore->GetGraphics()->DrawLine3DQueued(CVector(posMin.fX, posMax.fY, posMin.fZ), CVector(posMin.fX, posMax.fY, posMax.fZ), fLineWidth, color, false);
+    g_pCore->GetGraphics()->DrawLine3DQueued(CVector(posMin.fX, posMin.fY, posMin.fZ), CVector(posMin.fX, posMin.fY, posMax.fZ), fLineWidth, color);
+    g_pCore->GetGraphics()->DrawLine3DQueued(CVector(posMax.fX, posMin.fY, posMin.fZ), CVector(posMax.fX, posMin.fY, posMax.fZ), fLineWidth, color);
+    g_pCore->GetGraphics()->DrawLine3DQueued(CVector(posMax.fX, posMax.fY, posMin.fZ), CVector(posMax.fX, posMax.fY, posMax.fZ), fLineWidth, color);
+    g_pCore->GetGraphics()->DrawLine3DQueued(CVector(posMin.fX, posMax.fY, posMin.fZ), CVector(posMin.fX, posMax.fY, posMax.fZ), fLineWidth, color);
 
     // one corner
-    g_pCore->GetGraphics()->DrawLine3DQueued(CVector(posMin.fX, posMin.fY, posMin.fZ), CVector(posMin.fX, posMax.fY, posMin.fZ), fLineWidth, color, false);
-    g_pCore->GetGraphics()->DrawLine3DQueued(CVector(posMin.fX, posMin.fY, posMin.fZ), CVector(posMax.fX, posMin.fY, posMin.fZ), fLineWidth, color, false);
-    g_pCore->GetGraphics()->DrawLine3DQueued(CVector(posMin.fX, posMin.fY, posMax.fZ), CVector(posMin.fX, posMax.fY, posMax.fZ), fLineWidth, color, false);
-    g_pCore->GetGraphics()->DrawLine3DQueued(CVector(posMin.fX, posMin.fY, posMax.fZ), CVector(posMax.fX, posMin.fY, posMax.fZ), fLineWidth, color, false);
+    g_pCore->GetGraphics()->DrawLine3DQueued(CVector(posMin.fX, posMin.fY, posMin.fZ), CVector(posMin.fX, posMax.fY, posMin.fZ), fLineWidth, color);
+    g_pCore->GetGraphics()->DrawLine3DQueued(CVector(posMin.fX, posMin.fY, posMin.fZ), CVector(posMax.fX, posMin.fY, posMin.fZ), fLineWidth, color);
+    g_pCore->GetGraphics()->DrawLine3DQueued(CVector(posMin.fX, posMin.fY, posMax.fZ), CVector(posMin.fX, posMax.fY, posMax.fZ), fLineWidth, color);
+    g_pCore->GetGraphics()->DrawLine3DQueued(CVector(posMin.fX, posMin.fY, posMax.fZ), CVector(posMax.fX, posMin.fY, posMax.fZ), fLineWidth, color);
 
     // second corner
-    g_pCore->GetGraphics()->DrawLine3DQueued(CVector(posMax.fX, posMax.fY, posMin.fZ), CVector(posMin.fX, posMax.fY, posMin.fZ), fLineWidth, color, false);
-    g_pCore->GetGraphics()->DrawLine3DQueued(CVector(posMax.fX, posMax.fY, posMin.fZ), CVector(posMax.fX, posMin.fY, posMin.fZ), fLineWidth, color, false);
-    g_pCore->GetGraphics()->DrawLine3DQueued(CVector(posMax.fX, posMax.fY, posMax.fZ), CVector(posMin.fX, posMax.fY, posMax.fZ), fLineWidth, color, false);
-    g_pCore->GetGraphics()->DrawLine3DQueued(CVector(posMax.fX, posMax.fY, posMax.fZ), CVector(posMax.fX, posMin.fY, posMax.fZ), fLineWidth, color, false);
+    g_pCore->GetGraphics()->DrawLine3DQueued(CVector(posMax.fX, posMax.fY, posMin.fZ), CVector(posMin.fX, posMax.fY, posMin.fZ), fLineWidth, color);
+    g_pCore->GetGraphics()->DrawLine3DQueued(CVector(posMax.fX, posMax.fY, posMin.fZ), CVector(posMax.fX, posMin.fY, posMin.fZ), fLineWidth, color);
+    g_pCore->GetGraphics()->DrawLine3DQueued(CVector(posMax.fX, posMax.fY, posMax.fZ), CVector(posMin.fX, posMax.fY, posMax.fZ), fLineWidth, color);
+    g_pCore->GetGraphics()->DrawLine3DQueued(CVector(posMax.fX, posMax.fY, posMax.fZ), CVector(posMax.fX, posMin.fY, posMax.fZ), fLineWidth, color);
 
 
-    g_pCore->GetGraphics()->DrawWiredSphere(colModel->boundingBox.vecCenter + vecPosition, colModel->boundingBox.fRadius, SColorARGB(255, 0, 0, 255),
+    g_pCore->GetGraphics()->DrawWiredSphere(colModel->m_sphere.m_center + vecPosition, colModel->m_sphere.m_radius, SColorARGB(255, 0, 0, 255),
                                             fLineWidth, 2);
 }
 
@@ -315,10 +311,10 @@ void CCustomCollision::SetObjectScale(CObject* pObject, CVector scale)
     if (scale.fX > 1.0f || scale.fY > 1.0f || scale.fZ > 1.0f)
     {
         CColModelSAInterface* pOriginalColModel = GetOriginalColModel(pEntitySA);
-        pOriginalColModel->boundingBox.fRadius = 2;
-        pOriginalColModel->boundingBox.vecCenter = CVector(2, 2, 2);
-        pOriginalColModel->boundingBox.vecMin = CVector(-2, -2, -2);
-        pOriginalColModel->boundingBox.vecMax = CVector(2, 2, 2);
+        pOriginalColModel->m_sphere.m_radius = 2;
+        pOriginalColModel->m_sphere.m_center = CVector(2, 2, 2);
+        pOriginalColModel->m_bounds.m_vecMin = CVector(-2, -2, -2);
+        pOriginalColModel->m_bounds.m_vecMax = CVector(2, 2, 2);
     }
     SetObjectScaledCollision(pEntitySA, pCollisionCopy);
     int a = 5;

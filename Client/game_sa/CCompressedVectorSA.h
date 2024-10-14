@@ -18,6 +18,8 @@ typedef struct
     short x;
     short y;
     short z;
+
+    const CVector getVector() const { return CVector{x * 128.0f, y * 128.0f, z * 128.0f}; }
 } CCompressedVectorSA;
 
 #pragma pack(pop)
