@@ -75,7 +75,7 @@ CColModelSAInterface* CCustomCollision::CopyColModel(CColModelSAInterface* pColM
     if (pInterface->m_data->m_numShadowVertices > 0)
     {
         pInterface->m_data->m_shadowVertices = new CCompressedVectorSA[pInterface->m_data->m_numShadowTriangles];
-        memcpy(pInterface->m_data->m_shadowVertices, pInterface->m_data->m_shadowVertices,
+        memcpy(pInterface->m_data->m_shadowVertices, pColModel->m_data->m_shadowVertices,
                sizeof(CCompressedVectorSA) * pInterface->m_data->m_numShadowTriangles);
     }
 
