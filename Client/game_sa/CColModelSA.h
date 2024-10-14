@@ -28,8 +28,6 @@ static_assert(sizeof(CBoxSA) == 0x18, "Invalid size for CBoxSA");
 
 struct CBoundingBoxSA : CBoxSA
 {
-    /*CVector vecCenter;
-    float   fRadius;*/
 };
 static_assert(sizeof(CBoundingBoxSA) == 0x18, "Invalid size for CBoundingBoxSA");
 

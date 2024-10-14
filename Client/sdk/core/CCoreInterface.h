@@ -194,7 +194,6 @@ public:
     virtual void           SetLastConnectedServerName(const SString& strServerName) = 0;
 
     virtual void OnPostColorFilterRender() = 0;
-    virtual CDiscordManagerInterface*  GetDiscordManager() = 0;
     virtual CCustomCollisionInterface* GetCustomCollision() = 0;
 };
 

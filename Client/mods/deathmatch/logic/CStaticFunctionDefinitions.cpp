@@ -29,6 +29,8 @@
 #include <game/CWeaponStatManager.h>
 #include <game/CBuildingRemoval.h>
 #include <game/Task.h>
+#include <logic/CClientColModel.h>
+#include <game/CColModel.h>
 
 using std::list;
 
@@ -4129,6 +4131,7 @@ bool CStaticFunctionDefinitions::SetObjectCustomCollision(CClientEntity& Entity,
 
     return false;
 }
+
 bool CStaticFunctionDefinitions::SetObjectCollisionScale(CClientEntity& Entity, const CVector& vecScale)
 {
     RUN_CHILDREN(SetObjectCollisionScale(**iter, vecScale))
