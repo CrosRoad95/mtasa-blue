@@ -11,16 +11,16 @@
 
 #include "StdInc.h"
 
-// These includes have to be fixed!
-#include "../game_sa/CPedSA.h"
+#include <game/CFireManager.h>
+#include <game/CProjectile.h>
+#include <game/CProjectileInfo.h>
+#include <game/CEventList.h>
 #include "../game_sa/CEventDamageSA.h"
-#include "../game_sa/CColPointSA.h"
+#include <net/SyncStructures.h>
 
 extern CMultiplayerSA* pMultiplayer;
 
-using std::list;
-
-list<CShotSyncData*> ShotSyncData;
+std::list<CShotSyncData*> ShotSyncData;
 CShotSyncData        LocalShotSyncData;
 
 float*                        fDirectionX;
@@ -49,7 +49,7 @@ CVector vecLastOrigin;
 CVector vecLastLocalPlayerBulletStart;
 CVector vecLastLocalPlayerBulletEnd;
 
-char cTempGunDirection;
+eVehicleAimDirection cTempGunDirection;
 
 DWORD             vecTargetPosition;
 DWORD             vecAltPos;
@@ -138,9 +138,15 @@ bool IsLocalPlayer(CPedSAInterface* pPedInterface)
     return false;
 }
 
-VOID WriteGunDirectionDataForPed(CPedSAInterface* pPedInterface, float* fGunDirectionX, float* fGunDirectionY, char* cGunDirection)
+VOID WriteGunDirectionDataForPed(CPedSAInterface* pPedInterface, float* fGunDirectionX, float* fGunDirectionY, eVehicleAimDirection* cGunDirection)
 {
-    if (!IsLocalPlayer(pPedInterface))
+    SClientEntity<CPedSA>* pPedClientEntity = m_pools->GetPed((DWORD*)pPedInterface);
+    CPed*                  pAimingPed = pPedClientEntity ? pPedClientEntity->pEntity : nullptr;
+
+    if (!pAimingPed)
+        return;
+
+    if (!IsLocalPlayer(pAimingPed))
     {
         CRemoteDataStorageSA* data = CRemoteDataSA::GetRemoteDataStorage(pPedInterface);
         if (data)
@@ -167,6 +173,18 @@ VOID WriteGunDirectionDataForPed(CPedSAInterface* pPedInterface, float* fGunDire
         {
             // Make sure our pitch is updated (fixes first-person weapons not moving)
             *fGunDirectionY = pGameInterface->GetCamera()->Find3rdPersonQuickAimPitch();
+
+            if (pAimingPed->IsDoingGangDriveby())
+            {
+                // Fix pitch in driveby when facing left or backwards
+                switch (LocalShotSyncData.m_cInVehicleAimDirection)
+                {
+                    case eVehicleAimDirection::LEFT:
+                    case eVehicleAimDirection::BACKWARDS:
+                        *fGunDirectionY = -*fGunDirectionY;
+                        break;
+                }
+            }
 
             LocalShotSyncData.m_fArmDirectionX = *fGunDirectionX;
             LocalShotSyncData.m_fArmDirectionY = *fGunDirectionY;
@@ -294,12 +312,12 @@ static void Event_BulletImpact()
     }
 }
 
-CPedSAInterface*       pAPed = NULL;
-float                  fTempPosX = 0, fTempPosY = 0, fTempPosZ = 0;
-CPed*                  pATargetingPed = NULL;
-CVector*               pTempVec;
-bool*                  pSkipAim;
-CRemoteDataStorageSA*  pTempRemote;
+CPedSAInterface*      pAPed = NULL;
+float                 fTempPosX = 0, fTempPosY = 0, fTempPosZ = 0;
+CPed*                 pATargetingPed = NULL;
+CVector*              pTempVec;
+bool*                 pSkipAim;
+CRemoteDataStorageSA* pTempRemote;
 
 VOID _declspec(naked) HOOK_CTaskSimpleUsegun_ProcessPed()
 {
@@ -321,7 +339,7 @@ VOID _declspec(naked) HOOK_CTaskSimpleUsegun_ProcessPed()
     }
 }
 
-static CPed * GetTargetingPed()
+static CPed* GetTargetingPed()
 {
     SClientEntity<CPedSA>* pClientEntity = m_pools->GetPed((DWORD*)pAPed);
     return pClientEntity ? pClientEntity->pEntity : nullptr;
@@ -911,7 +929,7 @@ void _declspec(naked) HOOK_CFireManager__StartFire_()
     }
 }
 
-static CEntity* GetProjectileOwner(CPools*  pPools)
+static CEntity* GetProjectileOwner(CPools* pPools)
 {
     CEntity* pOwner = nullptr;
     if (pProjectileOwner)
@@ -941,7 +959,7 @@ static CEntity* GetProjectileOwner(CPools*  pPools)
     return pOwner;
 }
 
-static void GetProjectileTarget(CPools*  pPools)
+static void GetProjectileTarget(CPools* pPools)
 {
     projectileTargetEntity = nullptr;
 
@@ -993,7 +1011,7 @@ void ProcessProjectile()
     if (m_pProjectileHandler != NULL)
     {
         CPoolsSA* pPools = (CPoolsSA*)pGameInterface->GetPools();
-        CEntity* pOwner = GetProjectileOwner(pPools);
+        CEntity*  pOwner = GetProjectileOwner(pPools);
         GetProjectileTarget(pPools);
 
         CProjectileInfo* projectileInfo = pGameInterface->GetProjectileInfo()->GetProjectileInfo(dwProjectileInfoIndex);

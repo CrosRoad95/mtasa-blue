@@ -18,10 +18,19 @@
 /*****************************************************************************/
 
 // RenderWare definitions
+#if (!defined(RWFORCEENUMSIZEINT))
+    #define RWFORCEENUMSIZEINT ((std::int32_t)((~((std::uint32_t)0)) >> 1))
+#endif
+#define RWPLUGINOFFSET(_type, _base, _offset) ((_type*)((std::uint8_t*)(_base) + (_offset)))
 #define RW_STRUCT_ALIGN           ((int)((~((unsigned int)0))>>1))
 #define RW_TEXTURE_NAME_LENGTH    32
 #define RW_FRAME_NAME_LENGTH      23
 #define RW_MAX_TEXTURE_COORDS     8
+
+/* Type IDs */
+
+#define RP_TYPE_ATOMIC 1
+#define RP_TYPE_CLUMP  2
 
 typedef struct RwV2d                RwV2d;
 typedef struct RwV3d                RwV3d;
@@ -72,19 +81,68 @@ struct RwSphere
     RwV3d position;
     float radius;
 };
+
 struct RwMatrix
-{                                  // 16-byte padded
-    RwV3d        right;            // 0
-    unsigned int flags;            // 12
-    RwV3d        up;               // 16
-    unsigned int pad1;             // 28
-    RwV3d        at;               // 32
-    unsigned int pad2;             // 44
-    RwV3d        pos;              // 48
-    unsigned int pad3;             // 60
+{
+    /* These are padded to be 16 byte quantities per line */
+    RwV3d         right;
+    std::uint32_t flags;
+    RwV3d         up;
+    std::uint32_t pad1;
+    RwV3d         at;
+    std::uint32_t pad2;
+    RwV3d         pos;
+    std::uint32_t pad3;
+};
+
+struct RtQuat
+{
+    RwV3d imag; /**< The imaginary part(s) */
+    float real; /**< The real part */
+};
+
+struct RwFrame;
+struct RtAnimInterpolator;
+
+struct RpHAnimNodeInfo
+{
+    int      nodeID;    /**< User defined ID for this node  */
+    int      nodeIndex; /**< Array index of node  */
+    int      flags;     /**< Matrix push/pop flags  */
+    RwFrame* pFrame;    /**< Pointer to an attached RwFrame (see \ref RpHAnimHierarchyAttach) */
+};
+
+struct RpHAnimHierarchy
+{
+    int flags;    /**< Flags for the hierarchy  */
+    int numNodes; /**< Number of nodes in the hierarchy  */
+
+    RwMatrix* pMatrixArray;             /**< Pointer to node matrices*/
+    void*     pMatrixArrayUnaligned;    /**< Pointer to memory used for node matrices
+                                         * from which the aligned pMatrixArray is allocated */
+    RpHAnimNodeInfo* pNodeInfo;         /**< Array of node information (push/pop flags etc) */
+    RwFrame*         parentFrame;       /**< Pointer to the Root RwFrame of the hierarchy this
+                                         * RpHAnimHierarchy represents */
+    RpHAnimHierarchy* parentHierarchy;  /**< Internal use */
+    int               rootParentOffset; /**< Internal use */
+
+    RtAnimInterpolator* currentAnim; /**< Internal use */
 };
 
 // RenderWare enumerations
+enum RwOpCombineType
+{
+    rwCOMBINEREPLACE = 0, /**<Replace -
+                              all previous transformations are lost */
+    rwCOMBINEPRECONCAT,   /**<Pre-concatenation -
+                              the given transformation is applied
+                              before all others */
+    rwCOMBINEPOSTCONCAT,  /**<Post-concatenation -
+                              the given transformation is applied
+                              after all others */
+    rwOPCOMBINETYPEFORCEENUMSIZEINT = RWFORCEENUMSIZEINT
+};
+
 enum RwPrimitiveType
 {
     PRIMITIVE_NULL = 0,
@@ -263,25 +321,35 @@ struct RwGeometry
     unsigned char  unknown1[14];
     unsigned short refs;
 };
-struct RpInterpolation
+
+/* Interpolator flags */
+enum RpInterpolatorFlag : int32_t
 {
-    unsigned int unknown1;
-    unsigned int unknown2;
-    float        unknown3;
-    float        unknown4;
-    float        unknown5;
+    rpINTERPOLATORDIRTYINSTANCE = 0x01,
+    rpINTERPOLATORDIRTYSPHERE = 0x02,
+    rpINTERPOLATORNOFRAMEDIRTY = 0x04,
 };
+struct RpInterpolator
+{
+    int32_t flags;
+    int16_t startMorphTarget;
+    int16_t endMorphTarget;
+    float   time;
+    float   recipTime;
+    float   position;
+};
+
 struct RpAtomic
 {
     RwObjectFrame    object;
     void*            info;
     RpGeometry*      geometry;
-    RwSphere         bsphereLocal;
-    RwSphere         bsphereWorld;
+    RwSphere         boundingSphere;
+    RwSphere         worldBoundingSphere;
     RpClump*         clump;
     RwListEntry      globalClumps;
     RpAtomicCallback renderCallback;
-    RpInterpolation  interpolation;
+    RpInterpolator   interpolator;
     unsigned short   frame;
     unsigned short   unknown7;
     RwList           sectors;
@@ -333,8 +401,15 @@ struct RpMaterials
 };
 struct RpTriangle
 {
-    unsigned short v1, v2, v3;
+    unsigned short verts[3];
     unsigned short materialId;
+};
+struct RpMorphTarget
+{
+    RpGeometry* parentGeom;
+    RwSphere   boundingSphere;
+    RwV3d* verts;
+    RwV3d* normals;
 };
 struct RpGeometry
 {
@@ -354,8 +429,34 @@ struct RpGeometry
     RwTextureCoordinates* texcoords[RW_MAX_TEXTURE_COORDS];
     void*                 unknown2;
     void*                 info;
-    void*                 unknown3;
+    RpMorphTarget*        morph_target;
 };
+
+inline auto rwObjectGetParent(RwObject* o) {
+    return (RwObject*)o->parent;
+}
+
+inline auto RpAtomicGetFrame(RpAtomic* atomic) {
+    return (RwFrame*)atomic->object.object.parent;
+}
+
+inline auto RwFrameGetParent(RwFrame* f) {
+    return (RwFrame*)rwObjectGetParent((RwObject*)f);
+}
+
+inline RwMatrix* RwFrameGetMatrix(RwFrame* f) {
+    return &f->modelling;
+}
+
+inline void _rpAtomicResyncInterpolatedSphere(RpAtomic* atomic) {
+    reinterpret_cast<void(__cdecl*)(RpAtomic*)>(0x7491F0)(atomic);
+}
+
+/* NB "RpAtomicGetBoundingSphere(atomic++)" will break it */
+#define RpAtomicGetBoundingSphere(_atomic)                              \
+    ((((_atomic)->interpolator.flags & rpINTERPOLATORDIRTYSPHERE)?      \
+      _rpAtomicResyncInterpolatedSphere(_atomic), 0: 0),                \
+      &((_atomic)->boundingSphere))
 
 /*****************************************************************************/
 /** RenderWare I/O                                                          **/
@@ -392,7 +493,8 @@ struct RwBuffer
     void*        ptr;
     unsigned int size;
 };
-union RwStreamTypeData {
+union RwStreamTypeData
+{
     struct
     {
         unsigned int position;
@@ -423,11 +525,4 @@ struct RwStream
 struct RwError
 {
     int err1, err2;
-};
-
-struct TimeInfo {
-    TimeInfo(char timeOn, char timeOff, short OtherTimeModel) : m_nTimeOn(timeOn), m_nTimeOff(timeOff), m_wOtherTimeModel(OtherTimeModel) {};
-    char m_nTimeOn;
-    char m_nTimeOff;
-    short m_wOtherTimeModel;
 };

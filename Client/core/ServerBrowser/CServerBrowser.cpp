@@ -19,20 +19,20 @@ extern CCore* g_pCore;
 template <>
 CServerBrowser* CSingleton<CServerBrowser>::m_pSingleton = NULL;
 
-#define SB_SPAN             0.85f  //How much % of the screen the server browser should fill
-#define SB_NAVBAR_SIZE_Y    40 // Navbar button size
-#define SB_BUTTON_SIZE_X    26
-#define SB_BUTTON_SIZE_Y    26
-#define SB_SPACER           10 //Spacer between searchbar and navbar
-#define SB_SMALL_SPACER     5
-#define SB_SEARCHBAR_COMBOBOX_SIZE_X   45  // Mow much the search type combobox occupies of searchbar
-#define SB_SEARCHBAR_COMBOBOX_SIZE_Y   22
-#define SB_PLAYERLIST_SIZE_X    200  // Width of players list [NB. adjusted for low resolutions in CServerBrowser::CreateTab]
-#define SB_BACK_BUTTON_SIZE_Y   40  // Size of the back butt
-#define COMBOBOX_ARROW_SIZE_X   23  //Fixed CEGUI size of the 'combobox' arrow
-#define TAB_SIZE_Y              25  //Fixed CEGUI size of the Tab in a tab panel
+#define SB_SPAN 0.85f                  // How much % of the screen the server browser should fill
+#define SB_NAVBAR_SIZE_Y 40            // Navbar button size
+#define SB_BUTTON_SIZE_X 26
+#define SB_BUTTON_SIZE_Y 26
+#define SB_SPACER 10            // Spacer between searchbar and navbar
+#define SB_SMALL_SPACER 5
+#define SB_SEARCHBAR_COMBOBOX_SIZE_X 45            // Mow much the search type combobox occupies of searchbar
+#define SB_SEARCHBAR_COMBOBOX_SIZE_Y 22
+#define SB_PLAYERLIST_SIZE_X 200            // Width of players list [NB. adjusted for low resolutions in CServerBrowser::CreateTab]
+#define SB_BACK_BUTTON_SIZE_Y 40            // Size of the back butt
+#define COMBOBOX_ARROW_SIZE_X 23            // Fixed CEGUI size of the 'combobox' arrow
+#define TAB_SIZE_Y 25                       // Fixed CEGUI size of the Tab in a tab panel
 
-#define CONNECT_HISTORY_LIMIT   20
+#define CONNECT_HISTORY_LIMIT 20
 
 //
 // Local helper
@@ -347,6 +347,17 @@ void CServerBrowser::CreateTab(ServerBrowserType type, const char* szName)
     m_pAddressFavoriteIcon[type]->SetAlpha(0.3f);
     m_pAddressFavoriteIcon[type]->SetClickHandler(GUI_CALLBACK(&CServerBrowser::OnFavouritesClick, this));
 
+    // Remove recent played icon
+    if (type == ServerBrowserTypes::RECENTLY_PLAYED)
+    {
+        m_pRemoveFromRecentIcon[type] = reinterpret_cast<CGUIStaticImage*>(pManager->CreateStaticImage(m_pEditAddress[type]));
+        m_pRemoveFromRecentIcon[type]->SetPosition(CVector2D(fWidth - 40 - 8, (SB_BUTTON_SIZE_Y - 16) / 2), false);
+        m_pRemoveFromRecentIcon[type]->SetSize(CVector2D(16, 16), false);
+        m_pRemoveFromRecentIcon[type]->LoadFromFile("cgui\\images\\serverbrowser\\trashcan.png");
+        m_pRemoveFromRecentIcon[type]->SetAlpha(0.3f);
+        m_pRemoveFromRecentIcon[type]->SetClickHandler(GUI_CALLBACK(&CServerBrowser::OnRemoveFromRecentClick, this));
+    }
+
     // History Combo
     fWidth = fWidth + COMBOBOX_ARROW_SIZE_X;
     m_pComboAddressHistory[type] = reinterpret_cast<CGUIComboBox*>(pManager->CreateComboBox(m_pTab[type], ""));
@@ -504,15 +515,15 @@ void CServerBrowser::CreateTab(ServerBrowserType type, const char* szName)
         fX = fX + 20.0f + pManager->GetTextExtent(m_pIncludeLocked[type]->GetText().c_str()) + SB_SPACER;
         m_pIncludeOffline[type] = reinterpret_cast<CGUICheckBox*>(pManager->CreateCheckBox(m_pTab[type], _("Offline"), true));
         m_pIncludeOffline[type]->SetPosition(CVector2D(fX, fY), false);
-        m_pIncludeOffline[type]->AutoSize(m_pIncludeLocked[type]->GetText().c_str(), 20.0f);
+        m_pIncludeOffline[type]->AutoSize(m_pIncludeOffline[type]->GetText().c_str(), 20.0f);
         m_pIncludeOffline[type]->SetClickHandler(GUI_CALLBACK(&CServerBrowser::OnFilterChanged, this));
 
-        fX = fX + 20.0f + pManager->GetTextExtent(m_pIncludeOffline[type]->GetText().c_str()) + SB_SPACER * 2;
+        fX = fX + 20.0f + pManager->GetTextExtent(m_pIncludeOffline[type]->GetText().c_str()) + SB_SPACER;
     }
     else
     {
         m_pIncludeOffline[type] = NULL;
-        fX = fX + 20.0f + pManager->GetTextExtent(m_pIncludeLocked[type]->GetText().c_str()) + SB_SPACER * 2;
+        fX = fX + 20.0f + pManager->GetTextExtent(m_pIncludeLocked[type]->GetText().c_str()) + SB_SPACER;
     }
 
     m_pIncludeOtherVersions[type] = reinterpret_cast<CGUICheckBox*>(pManager->CreateCheckBox(m_pTab[type], _("Other Versions"), false));
@@ -562,7 +573,7 @@ void CServerBrowser::CreateTab(ServerBrowserType type, const char* szName)
     // Attach some keyboard events to the serverlist.
     m_pServerList[type]->SetEnterKeyHandler(GUI_CALLBACK(&CServerBrowser::OnDoubleClick, this));
     m_pServerList[type]->SetDoubleClickHandler(GUI_CALLBACK(&CServerBrowser::OnDoubleClick, this));
-    m_pServerList[type]->SetKeyDownHandler(GUI_CALLBACK_KEY(&CServerBrowser::OnServerListChangeRow, this));
+    m_pServerList[type]->SetKeyDownHandler(GUI_CALLBACK_KEY(&CServerBrowser::OnServerListKeyDown, this));
 
     // If any of the include checkboxes overlap with the help/back buttons, we move them down - next to the status bar.
     CVector2D                  vecButtonPos = m_pButtonGeneralHelp[type]->GetPosition();
@@ -593,6 +604,8 @@ void CServerBrowser::DeleteTab(ServerBrowserType type)
     delete m_pComboAddressHistory[type];
 
     delete m_pAddressFavoriteIcon[type];
+    if (type == ServerBrowserTypes::RECENTLY_PLAYED)
+        delete m_pRemoveFromRecentIcon[type];
     delete m_pEditSearch[type];
     delete m_pButtonRefreshIcon[type];
 
@@ -761,6 +774,11 @@ void CServerBrowser::SetVisible(bool bVisible)
         m_pGeneralHelpWindow->SetVisible(false);
         m_pQuickConnectHelpWindow->SetVisible(false);
         CServerInfo::GetSingletonPtr()->Hide();
+
+        for (uint i = 0; i < SERVER_BROWSER_TYPE_COUNT; i++)
+        {
+            m_FlashSearchBox[i].uiCount = 0;
+        }
     }
 }
 
@@ -821,7 +839,8 @@ void CServerBrowser::UpdateServerList(ServerBrowserType Type, bool bClearServerL
     // Get the appropriate server list
     CServerList* pList = GetServerList(Type);
 
-    if (pList->GetRevision() != m_pServerListRevision[Type] || bClearServerList)
+    bool bGetListsCleared = pList->GetRevision() != m_pServerListRevision[Type] || bClearServerList;
+    if (bGetListsCleared)
     {
         m_pServerListRevision[Type] = pList->GetRevision();
 
@@ -832,10 +851,15 @@ void CServerBrowser::UpdateServerList(ServerBrowserType Type, bool bClearServerL
         m_pServerPlayerList[Type]->Clear();
     }
 
+    bool didUpdateRowIndices = false;
+
     // Loop the server list
     for (CServerListIterator it = pList->IteratorBegin(); it != pList->IteratorEnd(); it++)
     {
         CServerListItem* pServer = *it;
+
+        if (bGetListsCleared)
+            pServer->iRowIndex = -1;
 
         // Find info from server cache for favourites and recent
         if (Type == ServerBrowserType::FAVOURITES || Type == ServerBrowserType::RECENTLY_PLAYED)
@@ -844,6 +868,12 @@ void CServerBrowser::UpdateServerList(ServerBrowserType Type, bool bClearServerL
         // Add/update/remove the item to the list
         if (pServer->revisionInList[Type] != pServer->uiRevision || bClearServerList)
         {
+            if (!didUpdateRowIndices)
+            {
+                UpdateRowIndexMembers(Type);
+                didUpdateRowIndices = true;
+            }
+
             pServer->revisionInList[Type] = pServer->uiRevision;
             AddServerToList(pServer, Type);
         }
@@ -865,6 +895,9 @@ void CServerBrowser::UpdateServerList(ServerBrowserType Type, bool bClearServerL
 
     m_pServerList[Type]->ForceUpdate();
     pList->SetUpdated(false);
+
+    if (Type == ServerBrowserTypes::RECENTLY_PLAYED)
+        m_pRemoveFromRecentIcon[Type]->SetAlpha(0.3f);
 }
 
 void CServerBrowser::CreateHistoryList()
@@ -950,7 +983,7 @@ void CServerBrowser::UpdateHistoryList()
     }
 }
 
-void CServerBrowser::AddServerToList(const CServerListItem* pServer, const ServerBrowserType Type)
+void CServerBrowser::AddServerToList(CServerListItem* pServer, const ServerBrowserType Type)
 {
     bool bIncludeEmpty = m_pIncludeEmpty[Type]->GetSelected();
     bool bIncludeFull = m_pIncludeFull[Type]->GetSelected();
@@ -1023,11 +1056,12 @@ void CServerBrowser::AddServerToList(const CServerListItem* pServer, const Serve
         //
         // Remove server from list
         //
-
-        int iIndex = FindRowFromServer(Type, pServer);
+        int iIndex = pServer->iRowIndex;
         if (iIndex != -1)
         {
             m_pServerList[Type]->RemoveRow(iIndex);
+            pServer->iRowIndex = -1;
+            UpdateRowIndexMembers(Type);
         }
     }
     else
@@ -1037,14 +1071,18 @@ void CServerBrowser::AddServerToList(const CServerListItem* pServer, const Serve
         //
 
         // Get existing row or create a new row if not found
-        int iIndex = FindRowFromServer(Type, pServer);
+        int iIndex = pServer->iRowIndex;
         if (iIndex == -1)
+        {
             iIndex = m_pServerList[Type]->AddRow(true);
+            pServer->iRowIndex = iIndex;
+        }
 
         const SString strVersion = !bIncludeOtherVersions ? "" : pServer->strVersion;
         const SString strVersionSortKey = pServer->strVersionSortKey + pServer->strTieBreakSortKey;
 
-        const SString strPlayers = pServer->nMaxPlayers == 0 ? "" : SString("%d / %d", pServer->nPlayers, pServer->nMaxPlayers);
+        const SString strVerified = pServer->isStatusVerified ? "" : "*";
+        const SString strPlayers = pServer->nMaxPlayers == 0 ? "" : SString("%d / %d %s", pServer->nPlayers, pServer->nMaxPlayers, *strVerified);
         const SString strPlayersSortKey = SString("%04d-", pServer->nMaxPlayers ? pServer->nPlayers + 1 : 0) + pServer->strTieBreakSortKey;
 
         const SString strPing = pServer->nPing == 9999 ? "" : SString("%d", pServer->nPing);
@@ -1087,7 +1125,44 @@ void CServerBrowser::AddServerToList(const CServerListItem* pServer, const Serve
         m_pServerList[Type]->SetItemColor(iIndex, m_hPlayers[Type], color.R, color.G, color.B, color.A);
         m_pServerList[Type]->SetItemColor(iIndex, m_hPing[Type], color.R, color.G, color.B, color.A);
         m_pServerList[Type]->SetItemColor(iIndex, m_hGame[Type], color.R, color.G, color.B, color.A);
+
+        if (!pServer->isStatusVerified)
+        {
+            SColor orange = SColorRGBA(230, 200, 180, color.A);
+            m_pServerList[Type]->SetItemColor(iIndex, m_hPlayers[Type], orange.R, orange.G, orange.B, orange.A);
+        }
+
+        // If the index was modified from the original, then update all indexes because it means there was some sort
+        if (pServer->iRowIndex != iIndex)
+            UpdateRowIndexMembers(Type);
     }
+}
+
+bool CServerBrowser::RemoveSelectedServerFromRecentlyPlayedList()
+{
+    ServerBrowserType Type = GetCurrentServerBrowserType();
+    CServerListItem*  pServer;
+    CServerList*      pHistoryList;
+    int               iSelectedItem;
+
+    if (Type != ServerBrowserTypes::RECENTLY_PLAYED)
+        return false;
+
+    pServer = FindSelectedServer(Type);
+
+    if (!pServer)
+        return false;
+
+    pHistoryList = GetRecentList();
+    iSelectedItem = m_pServerList[Type]->GetSelectedItemRow();
+
+    pHistoryList->Remove(pServer->Address, pServer->usGamePort);
+    m_pServerList[Type]->RemoveRow(iSelectedItem);
+    SaveRecentlyPlayedList();
+
+    m_pRemoveFromRecentIcon[Type]->SetAlpha(0.3f);
+
+    return true;
 }
 
 CServerList* CServerBrowser::GetServerList(ServerBrowserType Type)
@@ -1178,6 +1253,14 @@ bool CServerBrowser::OnClick(CGUIElement* pElement)
 
         // save the selected server
         m_iSelectedServer[Type] = iSelectedIndex;
+
+        if (Type == ServerBrowserTypes::RECENTLY_PLAYED)
+            m_pRemoveFromRecentIcon[Type]->SetAlpha(1.0f);
+    }
+    else
+    {
+        if (Type == ServerBrowserTypes::RECENTLY_PLAYED)
+            m_pRemoveFromRecentIcon[Type]->SetAlpha(0.3f);
     }
     return true;
 }
@@ -1374,6 +1457,11 @@ bool CServerBrowser::OnFavouritesClick(CGUIElement* pElement)
         }
     }
     return true;
+}
+
+bool CServerBrowser::OnRemoveFromRecentClick(CGUIElement* pElement)
+{
+    return RemoveSelectedServerFromRecentlyPlayedList();
 }
 
 bool CServerBrowser::OnAddressChanged(CGUIElement* pElement)
@@ -2048,23 +2136,21 @@ unsigned short CServerBrowser::FindServerHttpPort(const std::string& strHost, un
 
 /////////////////////////////////////////////////////////////////
 //
-// CServerBrowser::FindRowFromServer
+// CServerBrowser::UpdateRowIndexMembers
 //
-//
+// Update row index property of each CServerListItem on the server list
 //
 /////////////////////////////////////////////////////////////////
-int CServerBrowser::FindRowFromServer(ServerBrowserType Type, const CServerListItem* pServer)
+void CServerBrowser::UpdateRowIndexMembers(ServerBrowserType Type)
 {
     CGUIGridList* pServerList = m_pServerList[Type];
     int           iRowCount = pServerList->GetRowCount();
-    for (int i = 0; i < iRowCount; i++)
+
+    for (int iRowIndex = 0; iRowIndex < iRowCount; iRowIndex++)
     {
-        if (pServer == (CServerListItem*)pServerList->GetItemData(i, DATA_PSERVER))
-        {
-            return i;
-        }
+        CServerListItem* pServer = (CServerListItem*)pServerList->GetItemData(iRowIndex, DATA_PSERVER);
+        pServer->iRowIndex = iRowIndex;
     }
-    return -1;
 }
 
 /////////////////////////////////////////////////////////////////
@@ -2217,27 +2303,51 @@ void CServerBrowser::OnQuickConnectButtonClick()
 bool CServerBrowser::OnServerListChangeRow(CGUIKeyEventArgs Args)
 {
     ServerBrowserType Type = GetCurrentServerBrowserType();
-    int               SelectedItem = m_pServerList[Type]->GetSelectedItemRow();
+    int               iSelectedItem = m_pServerList[Type]->GetSelectedItemRow();
     int               iMax = m_pServerList[Type]->GetRowCount();
 
     switch (Args.scancode)
     {
         case DIK_UPARROW:
         {
-            if (SelectedItem > 0)
+            if (iSelectedItem > 0)
             {
-                m_pServerList[Type]->SetSelectedItem(SelectedItem - 1, 1, true);
+                m_pServerList[Type]->SetSelectedItem(iSelectedItem - 1, 1, true);
                 OnClick(m_pServerPlayerList[Type]);            // hacky
             }
             break;
         }
         case DIK_DOWNARROW:
         {
-            if (SelectedItem < (iMax - 1))
+            if (iSelectedItem < (iMax - 1))
             {
-                m_pServerList[Type]->SetSelectedItem(SelectedItem + 1, 1, true);
+                m_pServerList[Type]->SetSelectedItem(iSelectedItem + 1, 1, true);
                 OnClick(m_pServerPlayerList[Type]);            // hacky
             }
+            break;
+        }
+        default:
+            break;
+    }
+
+    return true;
+}
+
+bool CServerBrowser::OnServerListKeyDown(CGUIKeyEventArgs Args)
+{
+    switch (Args.scancode)
+    {
+        case DIK_UPARROW:
+        case DIK_DOWNARROW:
+        {
+            OnServerListChangeRow(Args);
+            break;
+        }
+        // Remove selected server from recent list when pressing on backspace
+        case DIK_BACK:
+        case DIK_DELETE:
+        {
+            RemoveSelectedServerFromRecentlyPlayedList();
             break;
         }
         default:

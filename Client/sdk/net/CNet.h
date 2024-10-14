@@ -107,6 +107,7 @@ public:
 
     virtual void           SetServerBitStreamVersion(unsigned short usServerBitStreamVersion) = 0;
     virtual unsigned short GetServerBitStreamVersion() = 0;
+    bool                   CanServerBitStream(eBitStreamVersion query) { return static_cast<eBitStreamVersion>(GetServerBitStreamVersion()) >= query; }
 
     virtual void           GetStatus(char* szStatus, size_t maxLength) = 0;
     virtual unsigned short GetNetRev() = 0;
@@ -114,7 +115,7 @@ public:
 
     virtual const char* GetNextBuffer() = 0;
     virtual const char* GetDiagnosticStatus() = 0;
-    virtual void        UpdatePingStatus(const char* szStatus, ushort& usDataRef) = 0;
+    virtual void        UpdatePingStatus(const char* szStatus, ushort& usDataRef, bool& isVerified) = 0;
 
     virtual bool VerifySignature(const char* pData, unsigned long ulSize) = 0;
 

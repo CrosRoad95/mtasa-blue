@@ -11,6 +11,7 @@
 #include "smartptr.h"
 #include "misc.h"
 #include "stdcpp.h"
+#include "trap.h"
 
 #ifdef _OPENMP
 # include <omp.h>
@@ -18,43 +19,15 @@
 
 NAMESPACE_BEGIN(CryptoPP)
 
+// Keep sync'd with primetab.cpp
+const unsigned int maxPrimeTableSize = 3511;
 const word s_lastSmallPrime = 32719;
-
-struct NewPrimeTable
-{
-	std::vector<word16> * operator()() const
-	{
-		const unsigned int maxPrimeTableSize = 3511;
-
-		member_ptr<std::vector<word16> > pPrimeTable(new std::vector<word16>);
-		std::vector<word16> &primeTable = *pPrimeTable;
-		primeTable.reserve(maxPrimeTableSize);
-
-		primeTable.push_back(2);
-		unsigned int testEntriesEnd = 1;
-
-		for (unsigned int p=3; p<=s_lastSmallPrime; p+=2)
-		{
-			unsigned int j;
-			for (j=1; j<testEntriesEnd; j++)
-				if (p%primeTable[j] == 0)
-					break;
-			if (j == testEntriesEnd)
-			{
-				primeTable.push_back(word16(p));
-				testEntriesEnd = UnsignedMin(54U, primeTable.size());
-			}
-		}
-
-		return pPrimeTable.release();
-	}
-};
 
 const word16 * GetPrimeTable(unsigned int &size)
 {
-	const std::vector<word16> &primeTable = Singleton<std::vector<word16>, NewPrimeTable>().Ref();
-	size = (unsigned int)primeTable.size();
-	return &primeTable[0];
+	extern const word16 precomputedPrimeTable[maxPrimeTableSize];
+	size = maxPrimeTableSize;
+	return precomputedPrimeTable;
 }
 
 bool IsSmallPrime(const Integer &p)
@@ -490,7 +463,7 @@ Integer MihailescuProvablePrime(RandomNumberGenerator &rng, unsigned int pbits)
 		// progression p = p_0 + \lambda * q2 = p_0 + 2 * \lambda * q,
 		// with q the recursively generated prime above. We will be able
 		// to use Lucas tets for proving primality. A trick of Quisquater
-		// allows taking q > cubic_root(p) rather then square_root: this
+		// allows taking q > cubic_root(p) rather than square_root: this
 		// decreases the recursion.
 
 		p.Randomize(rng, minP, maxP, Integer::ANY, 1, q2);
@@ -571,6 +544,9 @@ Integer CRT(const Integer &xp, const Integer &p, const Integer &xq, const Intege
 
 Integer ModularSquareRoot(const Integer &a, const Integer &p)
 {
+	// Callers must ensure p is prime, GH #1249
+	CRYPTOPP_ASSERT(IsPrime(p));
+
 	if (p%4 == 3)
 		return a_exp_b_mod_c(a, (p+1)/4, p);
 
@@ -620,6 +596,9 @@ Integer ModularSquareRoot(const Integer &a, const Integer &p)
 
 bool SolveModularQuadraticEquation(Integer &r1, Integer &r2, const Integer &a, const Integer &b, const Integer &c, const Integer &p)
 {
+	// Callers must ensure p is prime, GH #1249
+	CRYPTOPP_ASSERT(IsPrime(p));
+
 	Integer D = (b.Squared() - 4*a*c) % p;
 	switch (Jacobi(D, p))
 	{
@@ -646,6 +625,11 @@ bool SolveModularQuadraticEquation(Integer &r1, Integer &r2, const Integer &a, c
 Integer ModularRoot(const Integer &a, const Integer &dp, const Integer &dq,
 					const Integer &p, const Integer &q, const Integer &u)
 {
+	// Callers must ensure p and q are prime, GH #1249
+	CRYPTOPP_ASSERT(IsPrime(p) && IsPrime(q));
+
+	// GCC warning bug, https://stackoverflow.com/q/12842306/608639
+#ifdef _OPENMP
 	Integer p2, q2;
 	#pragma omp parallel
 		#pragma omp sections
@@ -655,12 +639,20 @@ Integer ModularRoot(const Integer &a, const Integer &dp, const Integer &dq,
 			#pragma omp section
 				q2 = ModularExponentiation((a % q), dq, q);
 		}
+#else
+	const Integer p2 = ModularExponentiation((a % p), dp, p);
+	const Integer q2 = ModularExponentiation((a % q), dq, q);
+#endif
+
 	return CRT(p2, p, q2, q, u);
 }
 
 Integer ModularRoot(const Integer &a, const Integer &e,
 					const Integer &p, const Integer &q)
 {
+	// Callers must ensure p and q are prime, GH #1249
+	CRYPTOPP_ASSERT(IsPrime(p) && IsPrime(q));
+
 	Integer dp = EuclideanMultiplicativeInverse(e, p-1);
 	Integer dq = EuclideanMultiplicativeInverse(e, q-1);
 	Integer u = EuclideanMultiplicativeInverse(p, q);
@@ -840,7 +832,7 @@ Integer Lucas(const Integer &e, const Integer &pIn, const Integer &n)
 	return m.ConvertOut(v);
 }
 
-// This is Peter Montgomery's unpublished Lucas sequence evalutation algorithm.
+// This is Peter Montgomery's unpublished Lucas sequence evaluation algorithm.
 // The total number of multiplies and squares used is less than the binary
 // algorithm (see above).  Unfortunately I can't get it to run as fast as
 // the binary algorithm because of the extra overhead.
@@ -997,8 +989,12 @@ Integer Lucas(const Integer &n, const Integer &P, const Integer &modulus)
 
 Integer InverseLucas(const Integer &e, const Integer &m, const Integer &p, const Integer &q, const Integer &u)
 {
-	Integer d = (m*m-4);
-	Integer p2, q2;
+	// Callers must ensure p and q are prime, GH #1249
+	CRYPTOPP_ASSERT(IsPrime(p) && IsPrime(q));
+
+	// GCC warning bug, https://stackoverflow.com/q/12842306/608639
+#ifdef _OPENMP
+	Integer d = (m*m-4), p2, q2;
 	#pragma omp parallel
 		#pragma omp sections
 		{
@@ -1013,6 +1009,15 @@ Integer InverseLucas(const Integer &e, const Integer &m, const Integer &p, const
 				q2 = Lucas(EuclideanMultiplicativeInverse(e,q2), m, q);
 			}
 		}
+#else
+	const Integer d = (m*m-4);
+	const Integer t1 = p-Jacobi(d,p);
+	const Integer p2 = Lucas(EuclideanMultiplicativeInverse(e,t1), m, p);
+
+	const Integer t2 = q-Jacobi(d,q);
+	const Integer q2 = Lucas(EuclideanMultiplicativeInverse(e,t2), m, q);
+#endif
+
 	return CRT(p2, p, q2, q, u);
 }
 

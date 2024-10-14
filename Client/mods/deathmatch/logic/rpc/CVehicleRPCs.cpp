@@ -52,6 +52,7 @@ void CVehicleRPCs::LoadFunctions()
     AddHandler(REMOVE_VEHICLE_SIRENS, RemoveVehicleSirens, "removeVehicleSirens");
     AddHandler(SET_VEHICLE_SIRENS, SetVehicleSirens, "setVehicleSirens");
     AddHandler(SET_VEHICLE_PLATE_TEXT, SetVehiclePlateText, "setVehiclePlateText");
+    AddHandler(SPAWN_VEHICLE_FLYING_COMPONENT, SpawnVehicleFlyingComponent, "spawnVehicleFlyingComponent");
 }
 
 void CVehicleRPCs::DestroyAllVehicles(NetBitStreamInterface& bitStream)
@@ -78,17 +79,25 @@ void CVehicleRPCs::FixVehicle(CClientEntity* pSource, NetBitStreamInterface& bit
 
 void CVehicleRPCs::BlowVehicle(CClientEntity* pSource, NetBitStreamInterface& bitStream)
 {
-    // Read out the vehicle id
-    unsigned char ucTimeContext;
-    if (bitStream.Read(ucTimeContext))
+    unsigned char syncTimeContext;
+    bool          withExplosion = true;
+
+    if (bitStream.Read(syncTimeContext))
     {
-        // Grab the vehicle
-        CClientVehicle* pVehicle = m_pVehicleManager->Get(pSource->GetID());
-        if (pVehicle)
+        if (bitStream.Can(eBitStreamVersion::VehicleBlowStateSupport) && !bitStream.ReadBit(withExplosion))
         {
-            // Blow it and change the time context
-            pVehicle->Blow(true);
-            pVehicle->SetSyncTimeContext(ucTimeContext);
+            return;
+        }
+
+        CClientVehicle* vehicle = m_pVehicleManager->Get(pSource->GetID());
+
+        if (vehicle)
+        {
+            VehicleBlowFlags blow;
+            blow.withExplosion = withExplosion;
+            vehicle->Blow(blow);
+
+            vehicle->SetSyncTimeContext(syncTimeContext);
         }
     }
 }
@@ -309,7 +318,7 @@ void CVehicleRPCs::SetVehicleDamageState(CClientEntity* pSource, NetBitStreamInt
                     {
                         bool spawnFlyingComponent = true;
 
-                        if (bitStream.Version() >= 0x06D)
+                        if (bitStream.Can(eBitStreamVersion::SetVehicleDoorState_SpawnFlyingComponent))
                         {
                             if (!bitStream.ReadBit(spawnFlyingComponent))
                                 break;
@@ -644,4 +653,17 @@ void CVehicleRPCs::SetVehiclePlateText(CClientEntity* pSourceEntity, NetBitStrea
             pVehicle->SetRegPlate(strText);
         }
     }
+}
+
+void CVehicleRPCs::SpawnVehicleFlyingComponent(CClientEntity* const sourceEntity, NetBitStreamInterface& bitStream)
+{
+    CClientVehicle* vehicle = m_pVehicleManager->Get(sourceEntity->GetID());
+    if (!vehicle)
+        return;
+
+    std::uint8_t nodeIndex, collisionType;
+    std::int32_t removalTime;
+
+    if (bitStream.Read(nodeIndex) && bitStream.Read(collisionType) && bitStream.Read(removalTime))
+        vehicle->SpawnFlyingComponent(static_cast<eCarNodes>(nodeIndex), static_cast<eCarComponentCollisionTypes>(collisionType), removalTime);
 }

@@ -9,33 +9,24 @@
  *****************************************************************************/
 
 #include "StdInc.h"
+#include "CLuaBitDefs.h"
+#include "CScriptArgReader.h"
 
 #define mask(n) ((1 << (n)) - 1)
 
 void CLuaBitDefs::LoadFunctions()
 {
-    std::map<const char*, lua_CFunction> functions{
-        {"bitAnd", bitAnd},
-        {"bitNot", bitNot},
-        {"bitOr", bitOr},
-        {"bitTest", bitTest},
-        {"bitXor", bitXor},
+    constexpr static const std::pair<const char*, lua_CFunction> functions[]{
+        {"bitAnd", bitAnd},         {"bitNot", bitNot},         {"bitOr", bitOr},         {"bitTest", bitTest},     {"bitXor", bitXor},
 
-        {"bitLRotate", bitLRotate},
-        {"bitRRotate", bitRRotate},
-        {"bitLShift", bitLShift},
-        {"bitRShift", bitRShift},
-        {"bitArShift", bitArShift},
+        {"bitLRotate", bitLRotate}, {"bitRRotate", bitRRotate}, {"bitLShift", bitLShift}, {"bitRShift", bitRShift}, {"bitArShift", bitArShift},
 
-        {"bitExtract", bitExtract},
-        {"bitReplace", bitReplace},
+        {"bitExtract", bitExtract}, {"bitReplace", bitReplace},
     };
 
     // Add functions
-    for (const auto& pair : functions)
-    {
-        CLuaCFunctions::AddFunction(pair.first, pair.second);
-    }
+    for (const auto& [name, func] : functions)
+        CLuaCFunctions::AddFunction(name, func);
 }
 
 int CLuaBitDefs::bitAnd(lua_State* luaVM)

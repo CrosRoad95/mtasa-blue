@@ -10,6 +10,16 @@
  *****************************************************************************/
 
 #include "StdInc.h"
+#include "CLuaArguments.h"
+#include "CLuaMain.h"
+#include "CGame.h"
+#include "CScriptDebugging.h"
+#include "CPerfStatManager.h"
+#include "CDatabaseManager.h"
+#include "CBan.h"
+#include "CAccount.h"
+#include "CAccessControlList.h"
+#include "CAccessControlListGroup.h"
 
 #ifndef WIN32
 #include <clocale>
@@ -58,7 +68,7 @@ void CLuaArguments::CopyRecursive(const CLuaArguments& Arguments, CFastHashMap<C
     pKnownTables->insert(std::make_pair((CLuaArguments*)&Arguments, (CLuaArguments*)this));
 
     // Copy all the arguments
-    vector<CLuaArgument*>::const_iterator iter = Arguments.m_Arguments.begin();
+    std::vector<CLuaArgument*>::const_iterator iter = Arguments.m_Arguments.begin();
     for (; iter != Arguments.m_Arguments.end(); ++iter)
     {
         CLuaArgument* pArgument = new CLuaArgument(**iter, pKnownTables);
@@ -132,14 +142,14 @@ void CLuaArguments::ReadArgument(lua_State* luaVM, int iIndex)
 void CLuaArguments::PushArguments(lua_State* luaVM) const
 {
     // Push all our arguments
-    vector<CLuaArgument*>::const_iterator iter = m_Arguments.begin();
+    std::vector<CLuaArgument*>::const_iterator iter = m_Arguments.begin();
     for (; iter != m_Arguments.end(); ++iter)
     {
         (*iter)->Push(luaVM);
     }
 }
 
-void CLuaArguments::PushAsTable(lua_State* luaVM, CFastHashMap<CLuaArguments*, int>* pKnownTables)
+void CLuaArguments::PushAsTable(lua_State* luaVM, CFastHashMap<CLuaArguments*, int>* pKnownTables) const
 {
     // Ensure there is enough space on the Lua stack
     LUA_CHECKSTACK(luaVM, 4);
@@ -167,7 +177,7 @@ void CLuaArguments::PushAsTable(lua_State* luaVM, CFastHashMap<CLuaArguments*, i
     lua_pop(luaVM, 1);
     pKnownTables->insert(std::make_pair((CLuaArguments*)this, size));
 
-    vector<CLuaArgument*>::const_iterator iter = m_Arguments.begin();
+    std::vector<CLuaArgument*>::const_iterator iter = m_Arguments.begin();
     for (; iter != m_Arguments.end() && (iter + 1) != m_Arguments.end(); ++iter)
     {
         (*iter)->Push(luaVM, pKnownTables);            // index
@@ -187,11 +197,9 @@ void CLuaArguments::PushAsTable(lua_State* luaVM, CFastHashMap<CLuaArguments*, i
 
 void CLuaArguments::PushArguments(const CLuaArguments& Arguments)
 {
-    vector<CLuaArgument*>::const_iterator iter = Arguments.IterBegin();
-    for (; iter != Arguments.IterEnd(); ++iter)
+    for (CLuaArgument* argument : Arguments)
     {
-        CLuaArgument* pArgument = new CLuaArgument(**iter);
-        m_Arguments.push_back(pArgument);
+        m_Arguments.push_back(new CLuaArgument(*argument));
     }
 }
 
@@ -348,12 +356,28 @@ CLuaArgument* CLuaArguments::PushArgument(const CLuaArgument& argument)
     return pArgument;
 }
 
-CLuaArgument* CLuaArguments::PushString(const std::string& strString)
+CLuaArgument* CLuaArguments::PushString(const std::string& string)
 {
-    CLuaArgument* pArgument = new CLuaArgument();
-    pArgument->ReadString(strString);
-    m_Arguments.push_back(pArgument);
-    return pArgument;
+    CLuaArgument* arg = new CLuaArgument();
+    arg->ReadString(string);
+    m_Arguments.push_back(arg);
+    return arg;
+}
+
+CLuaArgument* CLuaArguments::PushString(const std::string_view& string)
+{
+    CLuaArgument* arg = new CLuaArgument();
+    arg->ReadString(string);
+    m_Arguments.push_back(arg);
+    return arg;
+}
+
+CLuaArgument* CLuaArguments::PushString(const char* string)
+{
+    CLuaArgument* arg = new CLuaArgument();
+    arg->ReadString(string);
+    m_Arguments.push_back(arg);
+    return arg;
 }
 
 CLuaArgument* CLuaArguments::PushElement(CElement* pElement)
@@ -814,4 +838,21 @@ bool CLuaArguments::ReadFromJSONArray(json_object* object, std::vector<CLuaArgum
     //    else
     //        g_pGame->GetScriptDebugging()->LogError ( "Could not parse invalid JSON object.");
     return false;
+}
+
+bool CLuaArguments::IsEqualTo(const CLuaArguments& compareTo, std::set<const CLuaArguments*>* knownTables) const
+{
+    if (m_Arguments.size() != compareTo.m_Arguments.size())
+        return false;
+
+    if (knownTables != nullptr)
+    {
+        if (knownTables->find(&compareTo) != knownTables->end())
+            return true;
+
+        knownTables->insert(&compareTo);
+    }
+
+    return std::equal(std::begin(m_Arguments), std::end(m_Arguments), std::begin(compareTo.m_Arguments),
+                      [knownTables](const CLuaArgument* lhs, const CLuaArgument* rhs) { return lhs->IsEqualTo(*rhs, knownTables); });
 }

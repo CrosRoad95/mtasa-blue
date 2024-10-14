@@ -13,10 +13,12 @@
 
 #pragma once
 
+#include "CConnectHistory.h"
 #include <string>
 #include <list>
+#include <ehs/ehs.h>
 
-#include "ehs/ehs.h"
+class CResource;
 
 class CHTTPD : public EHS
 {
@@ -24,10 +26,10 @@ public:
     CHTTPD();            // start the initial server
     ~CHTTPD();
     // EHS interface
-    HttpResponse* RouteRequest(HttpRequest* ipoHttpRequest);
-    ResponseCode  HandleRequest(HttpRequest* ipoHttpRequest, HttpResponse* ipoHttpResponse);
-    void          HttpPulse();
-    bool          ShouldAllowConnection(const char* szAddress);
+    HttpResponse*  RouteRequest(HttpRequest* ipoHttpRequest);
+    HttpStatusCode HandleRequest(HttpRequest* ipoHttpRequest, HttpResponse* ipoHttpResponse);
+    void           HttpPulse();
+    bool           ShouldAllowConnection(const char* szAddress);
 
     // CHTTPD methods
     bool            StartHTTPD(const char* szIP, unsigned int port);
@@ -36,24 +38,24 @@ public:
     CResource*      GetResource() { return m_resource; }
     class CAccount* CheckAuthentication(HttpRequest* ipoHttpRequest);
     void            SetDefaultResource(const char* szResourceName) { m_strDefaultResourceName = szResourceName ? szResourceName : ""; }
-    ResponseCode    RequestLogin(HttpRequest* ipoHttpRequest, HttpResponse* ipoHttpResponse);
+    HttpStatusCode  RequestLogin(HttpRequest* ipoHttpRequest, HttpResponse* ipoHttpResponse);
 
 private:
-    CResource*  m_resource;
-    CHTTPD*     m_server;
+    CResource*  m_resource{};
+    CHTTPD*     m_server{};
     std::string m_strDefaultResourceName;            // default resource name
 
     EHSServerParameters m_Parameters;
 
-    bool m_bStartedServer;
+    bool m_bStartedServer{};
 
-    class CAccount*        m_pGuestAccount;
-    map<string, long long> m_LoggedInMap;
-    CConnectHistory        m_BruteForceProtect;
-    CConnectHistory        m_HttpDosProtect;
-    std::set<SString>      m_HttpDosExcludeMap;
-    std::mutex             m_mutexHttpDosProtect;
-    std::mutex             m_mutexLoggedInMap;
-    SString                m_strWarnMessageForIp;
-    CElapsedTime           m_WarnMessageTimer;
+    class CAccount*             m_pGuestAccount;
+    std::map<string, long long> m_LoggedInMap;
+    CConnectHistory             m_BruteForceProtect;
+    CConnectHistory             m_HttpDosProtect;
+    std::set<SString>           m_HttpDosExcludeMap;
+    std::mutex                  m_mutexHttpDosProtect;
+    std::mutex                  m_mutexLoggedInMap;
+    SString                     m_strWarnMessageForIp;
+    CElapsedTime                m_WarnMessageTimer;
 };

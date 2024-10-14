@@ -13,6 +13,14 @@ class CStaticFunctionDefinitions;
 
 #pragma once
 
+#include "CVehicle.h"
+#include "CRegistry.h"
+#include "lua/CLuaFunctionParseHelpers.h"
+#include <optional>
+
+class CVector2D;
+struct SLineOfSightFlags;
+
 class CStaticFunctionDefinitions
 {
 public:
@@ -96,7 +104,7 @@ public:
     static bool SetElementHealth(CElement* pElement, float fHealth);
     static bool SetElementModel(CElement* pElement, unsigned short usModel);
     static bool SetElementAttachedOffsets(CElement* pElement, CVector& vecPosition, CVector& vecRotation);
-    static bool SetElementSyncer(CElement* pElement, CPlayer* pPlayer, bool bEnable = true);
+    static bool SetElementSyncer(CElement* pElement, CPlayer* pPlayer, bool bEnable = true, bool bPersist = false);
     static bool SetElementCollisionsEnabled(CElement* pElement, bool bEnable);
     static bool SetElementFrozen(CElement* pElement, bool bFrozen);
     static bool SetLowLodElement(CElement* pElement, CElement* pLowLodElement);
@@ -127,7 +135,6 @@ public:
     static bool               GetPlayerIP(CElement* pElement, SString& strOutIP);
     static CAccount*          GetPlayerAccount(CElement* pElement);
     static const CMtaVersion& GetPlayerVersion(CPlayer* pPlayer);
-    static bool               GetPlayerScriptDebugLevel(CPlayer* pPlayer, unsigned int& uiLevel);
 
     // Player set functions
     static bool SetPlayerMoney(CElement* pElement, long lMoney, bool bInstant);
@@ -146,7 +153,6 @@ public:
                             unsigned short usDimension, CTeam* pTeam = NULL);
     static bool SetPlayerMuted(CElement* pElement, bool bMuted);
     static bool SetPlayerBlurLevel(CElement* pElement, unsigned char ucLevel);
-    static bool SetPlayerDiscordJoinParams(CElement* pElement, SString& strKey, SString& strPartyId, uint uiPartySize, uint uiPartyMax);
     static bool RedirectPlayer(CElement* pElement, const char* szHost, unsigned short usPort, const char* szPassword);
     static bool SetPlayerName(CElement* pElement, const char* szName);
     static bool DetonateSatchels(CElement* pElement);
@@ -234,7 +240,8 @@ public:
 
     // Vehicle create/destroy functions
     static CVehicle* CreateVehicle(CResource* pResource, unsigned short usModel, const CVector& vecPosition, const CVector& vecRotation, const char* szRegPlate,
-                                   unsigned char ucVariant, unsigned char ucVariant2);
+                                   unsigned char ucVariant, unsigned char ucVariant2, bool bSynced);
+    static bool SpawnVehicleFlyingComponent(CVehicle* const vehicle, std::uint8_t nodeIndex, std::uint8_t collisionType, std::int32_t removalTime = -1);
 
     // Vehicle get functions
     static bool  GetVehicleVariant(CVehicle* pVehicle, unsigned char& ucVariant, unsigned char& ucVariant2);
@@ -269,9 +276,7 @@ public:
     static bool  IsTrainDerailable(CVehicle* pVehicle, bool& bDerailable);
     static bool  GetTrainDirection(CVehicle* pVehicle, bool& bDirection);
     static bool  GetTrainSpeed(CVehicle* pVehicle, float& fSpeed);
-    static bool  GetTrainTrack(CVehicle* pVehicle, uchar& ucTrack);
     static bool  GetTrainPosition(CVehicle* pVehicle, float& fPosition);
-    static bool  IsVehicleBlown(CVehicle* pVehicle);
     static bool  GetVehicleHeadLightColor(CVehicle* pVehicle, SColor& outColor);
     static bool  GetVehicleDoorOpenRatio(CVehicle* pVehicle, unsigned char ucDoor, float& fRatio);
 
@@ -292,7 +297,7 @@ public:
 
     // Vehicle set functions
     static bool FixVehicle(CElement* pElement);
-    static bool BlowVehicle(CElement* pElement, bool bExplode);
+    static bool BlowVehicle(CElement* pElement, std::optional<bool> withExplosion);
     static bool SetVehicleColor(CElement* pElement, const CVehicleColor& color);
     static bool SetVehicleLandingGearDown(CElement* pElement, bool bLandingGearDown);
     static bool SetVehicleLocked(CElement* pElement, bool bLocked);
@@ -332,7 +337,6 @@ public:
     static bool SetTrainDerailable(CVehicle* pVehicle, bool bDerailable);
     static bool SetTrainDirection(CVehicle* pVehicle, bool bDirection);
     static bool SetTrainSpeed(CVehicle* pVehicle, float fSpeed);
-    static bool SetTrainTrack(CVehicle* pVehicle, uchar ucTrack);
     static bool SetTrainPosition(CVehicle* pVehicle, float fPosition);
     static bool SetVehicleHeadLightColor(CVehicle* pVehicle, const SColor color);
     static bool SetVehicleTurretPosition(CVehicle* pVehicle, float fHorizontal, float fVertical);
@@ -365,7 +369,7 @@ public:
     static bool RemoveVehicleSirens(CVehicle* pVehicle);
 
     // Marker create/destroy functions
-    static CMarker* CreateMarker(CResource* pResource, const CVector& vecPosition, const char* szType, float fSize, const SColor color, CElement* pVisibleTo);
+    static CMarker* CreateMarker(CResource* pResource, const CVector& vecPosition, const char* szType, float fSize, const SColor color, CElement* pVisibleTo, bool ignoreAlphaLimits);
 
     // Marker get functions
     static bool GetMarkerCount(unsigned int& uiCount);
@@ -381,6 +385,8 @@ public:
     static bool SetMarkerColor(CElement* pElement, const SColor color);
     static bool SetMarkerTarget(CElement* pElement, const CVector* pTarget);
     static bool SetMarkerIcon(CElement* pElement, const char* szIcon);
+
+    static bool SetMarkerTargetArrowProperties(CElement* Element, const SColor color, float size);
 
     // Blip create/destroy functions
     static CBlip* CreateBlip(CResource* pResource, const CVector& vecPosition, unsigned char ucIcon, unsigned char ucSize, const SColor color, short sOrdering,
@@ -408,6 +414,7 @@ public:
     // Object get functions
     static bool GetObjectRotation(CObject* pObject, CVector& vecRotation);
     static bool IsObjectVisibleInAllDimensions(CElement* pElement);
+    static bool IsObjectBreakable(CElement* pElement);
 
     // Object set functions
     static bool SetObjectRotation(CElement* pElement, const CVector& vecRotation);
@@ -415,7 +422,11 @@ public:
     static bool MoveObject(CResource* pResource, CElement* pElement, unsigned long ulTime, const CVector& vecPosition, const CVector& vecRotation,
                            CEasingCurve::eType a_easingType, double a_fEasingPeriod, double a_fEasingAmplitude, double a_fEasingOvershoot);
     static bool StopObject(CElement* pElement);
+    static bool BreakObject(CElement* pElement);
     static bool SetObjectVisibleInAllDimensions(CElement* pElement, bool bVisible, unsigned short usNewDimension = 0);
+    static bool SetObjectBreakable(CElement* pElement, const bool bBreakable);
+    static bool RespawnObject(CElement* const pElement) noexcept;
+    static bool ToggleObjectRespawn(CElement* const pElement, const bool bRespawn) noexcept;
 
     // Radar area create/destroy funcs
     static CRadarArea* CreateRadarArea(CResource* pResource, const CVector2D& vecPosition, const CVector2D& vecSize, const SColor color, CElement* pVisibleTo);
@@ -449,19 +460,19 @@ public:
     static bool UsePickup(CElement* pElement, CPlayer* pPlayer);
 
     // Shape create funcs
-    static CColCircle*    CreateColCircle(CResource* pResource, const CVector2D& vecPosition, float fRadius);
-    static CColCuboid*    CreateColCuboid(CResource* pResource, const CVector& vecPosition, const CVector& vecSize);
-    static CColSphere*    CreateColSphere(CResource* pResource, const CVector& vecPosition, float fRadius);
-    static CColRectangle* CreateColRectangle(CResource* pResource, const CVector2D& vecPosition, const CVector2D& vecSize);
-    static CColPolygon*   CreateColPolygon(CResource* pResource, const std::vector<CVector2D>& vecPointList);
-    static CColTube*      CreateColTube(CResource* pResource, const CVector& vecPosition, float fRadius, float fHeight);
-    static bool           IsInsideColShape(CColShape* pColShape, const CVector& vecPosition, bool& inside);
-    static void           RefreshColShapeColliders(CColShape* pColShape);
+    static class CColCircle*    CreateColCircle(CResource* pResource, const CVector2D& vecPosition, float fRadius);
+    static class CColCuboid*    CreateColCuboid(CResource* pResource, const CVector& vecPosition, const CVector& vecSize);
+    static class CColSphere*    CreateColSphere(CResource* pResource, const CVector& vecPosition, float fRadius);
+    static class CColRectangle* CreateColRectangle(CResource* pResource, const CVector2D& vecPosition, const CVector2D& vecSize);
+    static class CColPolygon*   CreateColPolygon(CResource* pResource, const std::vector<CVector2D>& vecPointList);
+    static class CColTube*      CreateColTube(CResource* pResource, const CVector& vecPosition, float fRadius, float fHeight);
+    static bool                 IsInsideColShape(CColShape* pColShape, const CVector& vecPosition, bool& inside);
+    static void                 RefreshColShapeColliders(CColShape* pColShape);
 
     // Shape get functions
     static bool GetColShapeRadius(CColShape* pColShape, float& fRadius);
     static bool GetColPolygonPointPosition(CColPolygon* pColPolygon, uint uiPointIndex, CVector2D& vecPoint);
-    
+
     // Shape set functions
     static bool SetColShapeRadius(CColShape* pColShape, float fRadius);
     static bool SetColShapeSize(CColShape* pColShape, CVector& vecSize);
@@ -470,6 +481,7 @@ public:
     static bool AddColPolygonPoint(CColPolygon* pColPolygon, const CVector2D& vecPoint);
     static bool AddColPolygonPoint(CColPolygon* pColPolygon, uint uiPointIndex, const CVector2D& vecPoint);
     static bool RemoveColPolygonPoint(CColPolygon* pColPolygon, uint uiPointIndex);
+    static bool SetColPolygonHeight(CColPolygon* pColPolygon, float fFloor, float fCeil);
 
     // Weapon funcs
     static CCustomWeapon* CreateWeapon(CResource* pResource, eWeaponType weaponType, CVector vecPosition);
@@ -550,7 +562,7 @@ public:
     static CWater* CreateWater(CResource* pResource, CVector* pV1, CVector* pV2, CVector* pV3, CVector* pV4, bool bShallow);
     static bool    SetElementWaterLevel(CWater* pWater, float fLevel);
     static bool    SetAllElementWaterLevel(float fLevel);
-    static bool    SetWorldWaterLevel(float fLevel, bool bIncludeWorldNonSeaLevel);
+    static bool    SetWorldWaterLevel(float fLevel, bool bIncludeWorldNonSeaLevel, bool bIncludeWorldSeaLevel, bool bIncludeOutsideWorldLevel);
     static bool    ResetWorldWaterLevel();
     static bool    GetWaterVertexPosition(CWater* pWater, int iVertexIndex, CVector& vecPosition);
     static bool    SetWaterVertexPosition(CWater* pWater, int iVertexIndex, CVector& vecPosition);
@@ -565,9 +577,9 @@ public:
                               CLuaMain* pLuaMain);
     static void OutputChatBox(const char* szText, const std::vector<CPlayer*>& sendList, unsigned char ucRed, unsigned char ucGreen, unsigned char ucBlue,
                               bool bColorCoded);
-    static bool OutputConsole(const char* szText, CElement* pElement);
+    static void OutputConsole(const char* szText, CElement* pElement);
     static bool SetServerPassword(const SString& strPassword, bool bSave);
-    static bool ClearChatBox(CElement* pElement);
+    static void ClearChatBox(CElement* pElement);
 
     // General world get funcs
     static bool GetTime(unsigned char& ucHour, unsigned char& ucMinute);
@@ -645,6 +657,8 @@ public:
     static bool SendSyncIntervals(CPlayer* pPlayer = NULL);
     static bool SetMoonSize(int iMoonSize);
     static bool ResetMoonSize();
+    static bool IsWorldSpecialPropertyEnabled(WorldSpecialProperty property);
+    static bool SetWorldSpecialPropertyEnabled(WorldSpecialProperty property, bool isEnabled);
 
     // Loaded Map Functions
     static CElement* GetRootElement();
@@ -732,10 +746,12 @@ public:
     static bool ShowCursor(CElement* pElement, CLuaMain* pLuaMain, bool bShow, bool bToggleControls);
 
     // Chat funcs
-    static bool ShowChat(CElement* pElement, bool bShow);
+    static bool ShowChat(CElement* pElement, bool bShow, bool bInputBlocked);
 
     // Misc funcs
     static bool ResetMapInfo(CElement* pElement);
+    static void SendClientTransferBoxVisibility(CPlayer* player = nullptr);
+    static bool SetClientTransferBoxVisible(bool visible);
 
     // Resource funcs
     static CElement* GetResourceMapRootElement(CResource* pResource, const char* szMap);

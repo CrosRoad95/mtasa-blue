@@ -10,6 +10,8 @@
  *****************************************************************************/
 
 #include "StdInc.h"
+#include "CRemoteCalls.h"
+#include "CGame.h"
 
 CRemoteCalls::CRemoteCalls()
 {
@@ -229,12 +231,10 @@ void CRemoteCall::DownloadFinishedCallback(const SHttpDownloadResult& result)
         if (result.bSuccess)
         {
             if (pCall->IsFetch())
-            {
                 arguments.PushString(std::string(result.pData, result.dataSize));
-                arguments.PushNumber(0);
-            }
             else
                 arguments.ReadFromJSONString(result.pData);
+            arguments.PushNumber(0);
         }
         else
         {
@@ -275,8 +275,10 @@ void CRemoteCall::DownloadFinishedCallback(const SHttpDownloadResult& result)
 
     // Append stored arguments
     if (pCall->IsFetch())
-        for (uint i = 0; i < pCall->GetFetchArguments().Count(); i++)
-            arguments.PushArgument(*(pCall->GetFetchArguments()[i]));
+    {
+        for (CLuaArgument* argument : pCall->GetFetchArguments())
+            arguments.PushArgument(*argument);
+    }
 
     if (pCall->m_VM)
         arguments.Call(pCall->m_VM, pCall->m_iFunction);

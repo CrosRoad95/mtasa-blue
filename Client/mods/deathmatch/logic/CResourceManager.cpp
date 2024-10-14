@@ -23,6 +23,9 @@ CResourceManager::~CResourceManager()
     {
         CResource* pResource = m_resources.back();
         Remove(pResource);
+
+        // Force delete all objects in cache (see https://github.com/multitheftauto/mtasa-blue/issues/1840).
+        g_pClientGame->GetElementDeleter()->DoDeleteAll();
     }
 }
 
@@ -126,9 +129,6 @@ void CResourceManager::Remove(CResource* pResource)
     // Triggger the onStop event, and set resource state to 'stopping'
     pResource->Stop();
 
-    // Delete all the resource's locally created children (the server won't do that)
-    pResource->DeleteClientChildren();
-
     // Delete the resource
     m_resources.remove(pResource);
     assert(MapContains(m_NetIdResourceMap, pResource->GetNetID()));
@@ -150,7 +150,7 @@ void CResourceManager::StopAll()
 }
 
 // pResource may be changed on return, and it could be NULL if the function returns false.
-bool CResourceManager::ParseResourcePathInput(std::string strInput, CResource*& pResource, std::string* pStrPath, std::string* pStrMetaPath)
+bool CResourceManager::ParseResourcePathInput(std::string strInput, CResource*& pResource, std::string* pStrPath, std::string* pStrMetaPath, bool bPassSize)
 {
     ReplaceOccurrencesInString(strInput, "\\", "/");
 
@@ -190,7 +190,7 @@ bool CResourceManager::ParseResourcePathInput(std::string strInput, CResource*& 
             }
         }
     }
-    else if (pResource && IsValidFilePath(strInput.c_str()))
+    else if (pResource && (bPassSize ? IsValidFilePath(strInput.c_str(), strInput.size()) : IsValidFilePath(strInput.c_str())))
     {
         if (pStrPath)
             *pStrPath = pResource->GetResourceDirectoryPath(accessType, strInput);
@@ -265,7 +265,7 @@ void CResourceManager::ValidateResourceFile(const SString& strInFilename, const 
             if (buffer)
                 checksum = CChecksum::GenerateChecksumFromBuffer(buffer, bufferSize);
             else
-                checksum = CChecksum::GenerateChecksumFromFile(strInFilename);
+                checksum = CChecksum::GenerateChecksumFromFileUnsafe(strInFilename);
             if (checksum != pResourceFile->GetServerChecksum())
             {
                 char szMd5[33];

@@ -4,33 +4,101 @@
 
 #include <assert.h>
 
-void HttpRequest::GetFormDataFromString ( const std::string & irsString ///< string to parse for form data
-	)
+void HttpRequest::ParseRequestURI(std::string_view uri)
 {
+	if (uri.empty())
+		return;
 
-	PME oNameValueRegex ( "[?]?([^?=]*)=([^&]*)&?", "g" );
-	while ( oNameValueRegex.match ( irsString ) ) {
+	// See: https://www.rfc-editor.org/rfc/rfc3986#section-3.4
+	if (size_t queryDelimiter = uri.find_first_of("?&"); queryDelimiter != std::string_view::npos)
+	{
+		// Skip repeating '?' (question mark) and '&' (ampersand) characters after the first one.
+		if (queryDelimiter = uri.find_first_not_of("?&", queryDelimiter + 1); queryDelimiter == std::string_view::npos)
+			return;
 
-		ContentDisposition oContentDisposition;
-		std::string sName = oNameValueRegex [ 1 ];
-		std::string sValue = oNameValueRegex [ 2 ];
+		std::string_view parameters = uri.substr(queryDelimiter);
 
-#ifdef EHS_DEBUG
-		fprintf ( stderr, "[EHS_DEBUG] Info: Got form data: '%s' => '%s'\n",
-				  sName.c_str ( ),
-				  sValue.c_str ( ) );
-#endif
+		// Discard any trailing fragment.
+		if (size_t fragmentDelimiter = parameters.find('#'); fragmentDelimiter != std::string_view::npos)
+		{
+			parameters = parameters.substr(0, fragmentDelimiter);
+		}
 
-		oFormValueMap [ sName ] =
-			FormValue ( sValue, oContentDisposition );
+		// Limit request uri parameters to 4096 bytes.
+		if (parameters.length() > 4096)
+		{
+			parameters = parameters.substr(0, 4096);
+		}
 
+		// According to the RFC, query can be anything, but this web server implementation only supports "key=value" pairs,
+		// which are parsable as form data.
+		ParseFormData(parameters, true);
 	}
-
 }
 
+void HttpRequest::ParseFormData(std::string_view formData, bool isQueryData)
+{
+	size_t counter = 0;
 
+	// Limit the maximum acceptable form data fields to 256.
+	while (!formData.empty() && counter < 256)
+	{
+		std::string_view parameter;
 
+		if (size_t delimiter = formData.find('&'); delimiter != std::string_view::npos)
+		{
+			parameter = formData.substr(0, delimiter);
 
+			// Skip repeating '&' (ampersand) characters after the first one.
+			if (delimiter = formData.find_first_not_of('&', delimiter + 1); delimiter != std::string_view::npos)
+			{
+				formData = formData.substr(delimiter);
+			}
+			else
+			{
+				formData = {};
+			}
+		}
+		else
+		{
+			parameter = formData;
+			formData = {};
+		}
+
+		if (!parameter.empty())
+		{
+			std::string_view key, value;
+
+			if (size_t delimiter = parameter.find('='); delimiter != std::string_view::npos)
+			{
+				key = parameter.substr(0, delimiter);
+
+				// Skip repeating '=' (equals) characters after the first one.
+				if (delimiter = parameter.find_first_not_of('=', delimiter + 1); delimiter != std::string_view::npos)
+				{
+					value = parameter.substr(delimiter);
+				}
+			}
+			else
+			{
+				key = parameter;
+				// NOTE: value is empty.
+			}
+
+			if (!key.empty())
+			{
+				oFormValueMap[std::string{key}] = FormValue{value};
+
+				if (isQueryData)
+				{
+					oQueryValueMap[std::string{key}] = FormValue{value};
+				}
+			}
+		}
+
+		counter += 1;
+	}
+}
 
 // this parses a single piece of a multipart form body
 // here are two examples -- first is an uploaded file, second is a
@@ -322,7 +390,7 @@ HttpRequest::HttpParseStates HttpRequest::ParseData ( std::string & irsData ///<
 			else {
 				
 				// everything must be uppercase according to rfc2616
-				PME oRequestLineRegex ( "^(OPTIONS|GET|HEAD|POST|PUT|DELETE|TRACE|CONNECT) ([^ ]*) HTTP/([^ ]+)\\r\\n$" );
+				PME oRequestLineRegex ( "^(OPTIONS|GET|HEAD|POST|PUT|DELETE|TRACE|CONNECT|PATCH) ([^ ]*) HTTP/([^ ]+)\\r\\n$" );
 
 				if ( oRequestLineRegex.match ( sLine ) ) {
 
@@ -334,7 +402,7 @@ HttpRequest::HttpParseStates HttpRequest::ParseData ( std::string & irsData ///<
 					
 					
 					// check to see if the uri appeared to have form data in it
-					GetFormDataFromString ( sUri );
+					ParseRequestURI(sUri);
 
 					// on to the headers
 					nCurrentHttpParseState = HTTPPARSESTATE_HEADERS;
@@ -491,7 +559,7 @@ HttpRequest::HttpParseStates HttpRequest::ParseData ( std::string & irsData ///<
 				// else the body is just one piece
 				else {
 					// check for any form data
-					GetFormDataFromString ( sBody );
+					ParseFormData(sBody, false);
 					
 #ifdef EHS_DEBUG
 					fprintf ( stderr, "Done with body, done with entire request\n" );
@@ -599,7 +667,7 @@ int GetNextLine ( std::string & irsLine, ///< line removed from *ippsBuffer
 
 /// List of possible HTTP request methods
 const char * RequestMethodStrings [] = { "OPTIONS", "GET", "HEAD", "POST", 
-								   "PUT", "DELETE", "TRACE", "CONNECT", "*" };
+								   "PUT", "DELETE", "TRACE", "CONNECT", "PATCH", "*"};
 
 
 RequestMethod GetRequestMethodFromString ( const std::string & isRequestMethod  ///< determine the request type enumeration from the request string

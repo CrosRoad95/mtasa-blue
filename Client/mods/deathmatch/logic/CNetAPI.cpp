@@ -11,6 +11,9 @@
 
 #include <StdInc.h>
 #include <net/SyncStructures.h>
+#include <game/CWeapon.h>
+#include <game/CWeaponStat.h>
+#include <game/CWeaponStatManager.h>
 
 extern CClientGame* g_pClientGame;
 CTickRateSettings   g_TickRateSettings;
@@ -315,16 +318,30 @@ void CNetAPI::DoPulse()
                 // Are in a vehicle?
                 if (pVehicle)
                 {
-                    // Send a puresync packet
-                    NetBitStreamInterface* pBitStream = g_pNet->AllocateNetBitStream();
-                    if (pBitStream)
+                    // Are we getting out and physically left the car
+                    if (pPlayer->GetVehicleInOutState() == VEHICLE_INOUT_GETTING_OUT && !pPlayer->GetRealOccupiedVehicle())
                     {
-                        // Write our data
-                        WriteVehiclePuresync(pPlayer, pVehicle, *pBitStream);
+                        // Send a player puresync packet
+                        NetBitStreamInterface* pBitStream = g_pNet->AllocateNetBitStream();
+                        if (pBitStream)
+                        {
+                            WritePlayerPuresync(pPlayer, *pBitStream);
 
-                        // Send the packet and destroy it
-                        g_pNet->SendPacket(PACKET_ID_PLAYER_VEHICLE_PURESYNC, pBitStream, PACKET_PRIORITY_MEDIUM, PACKET_RELIABILITY_UNRELIABLE_SEQUENCED);
-                        g_pNet->DeallocateNetBitStream(pBitStream);
+                            g_pNet->SendPacket(PACKET_ID_PLAYER_PURESYNC, pBitStream, PACKET_PRIORITY_MEDIUM, PACKET_RELIABILITY_UNRELIABLE_SEQUENCED);
+                            g_pNet->DeallocateNetBitStream(pBitStream);
+                        }
+                    }
+                    else
+                    {
+                        // Send a vehicle puresync packet
+                        NetBitStreamInterface* pBitStream = g_pNet->AllocateNetBitStream();
+                        if (pBitStream)
+                        {
+                            WriteVehiclePuresync(pPlayer, pVehicle, *pBitStream);
+
+                            g_pNet->SendPacket(PACKET_ID_PLAYER_VEHICLE_PURESYNC, pBitStream, PACKET_PRIORITY_MEDIUM, PACKET_RELIABILITY_UNRELIABLE_SEQUENCED);
+                            g_pNet->DeallocateNetBitStream(pBitStream);
+                        }
                     }
 
                     // Sync its damage model too
@@ -373,7 +390,7 @@ void CNetAPI::DoPulse()
             // Time to freeze because of lack of return sync?
             if (!g_pClientGame->IsDownloadingBigPacket() && (m_bStoredReturnSync) && (m_ulLastPuresyncTime != 0) && (m_ulLastSyncReturnTime != 0) &&
                 (ulCurrentTime <= m_ulLastPuresyncTime + 5000) && (ulCurrentTime >= m_ulLastSyncReturnTime + 10000) &&
-                (!g_pClientGame->IsGettingIntoVehicle()) && (!m_bIncreaseTimeoutTime))
+                (!g_pClientGame->GetLocalPlayer()->m_bIsGettingIntoVehicle) && (!m_bIncreaseTimeoutTime))
             {
                 // No vehicle or vehicle in seat 0?
                 if (!pVehicle || pPlayer->GetOccupiedVehicleSeat() == 0)
@@ -625,8 +642,8 @@ void CNetAPI::ReadKeysync(CClientPlayer* pPlayer, NetBitStreamInterface& BitStre
             BitStream.Read(&aim);
 
             // Read out the driveby direction
-            unsigned char ucDriveByAim;
-            BitStream.Read(ucDriveByAim);
+            eVehicleAimDirection ucDriveByAim;
+            BitStream.Read(*reinterpret_cast<char*>(&ucDriveByAim));
 
             // Set the aim data (immediately if in vehicle, otherwize delayed/interpolated)
             if (pVehicle)
@@ -763,7 +780,7 @@ void CNetAPI::WriteKeysync(CClientPed* pPlayerModel, NetBitStreamInterface& BitS
 
                 // Write the driveby direction
                 CShotSyncData* pShotsyncData = g_pMultiplayer->GetLocalShotSyncData();
-                BitStream.Write(pShotsyncData->m_cInVehicleAimDirection);
+                BitStream.Write(static_cast<char>(pShotsyncData->m_cInVehicleAimDirection));
             }
         }
         else
@@ -928,7 +945,7 @@ void CNetAPI::ReadPlayerPuresync(CClientPlayer* pPlayer, NetBitStreamInterface& 
             BitStream.Read(&aim);
 
             // Interpolate the aiming
-            pPlayer->SetAimInterpolated(TICK_RATE_AIM, rotation.data.fRotation, aim.data.fArm, flags.data.bAkimboTargetUp, 0);
+            pPlayer->SetAimInterpolated(TICK_RATE_AIM, rotation.data.fRotation, aim.data.fArm, flags.data.bAkimboTargetUp, eVehicleAimDirection::FORWARDS);
 
             // Read the aim data only if he's shooting or aiming
             if (aim.isFull())
@@ -959,13 +976,9 @@ void CNetAPI::ReadPlayerPuresync(CClientPlayer* pPlayer, NetBitStreamInterface& 
         position.data.vecPosition -= vecTempPos;
     }
 
-    // If the player is working on leaving a vehicle, don't set any target position
-    if (pPlayer->GetVehicleInOutState() == VEHICLE_INOUT_NONE || pPlayer->GetVehicleInOutState() == VEHICLE_INOUT_GETTING_IN ||
-        pPlayer->GetVehicleInOutState() == VEHICLE_INOUT_JACKING)
-    {
-        pPlayer->SetTargetPosition(position.data.vecPosition, TICK_RATE, pContactEntity);
-        pPlayer->SetTargetRotation(rotation.data.fRotation);
-    }
+    // Set position and rotation
+    pPlayer->SetTargetPosition(position.data.vecPosition, TICK_RATE, pContactEntity);
+    pPlayer->SetTargetRotation(rotation.data.fRotation);
 
     // Set move speed, controller state and camera rotation + duck state
     pPlayer->SetControllerState(ControllerState);
@@ -1302,8 +1315,8 @@ void CNetAPI::ReadVehiclePuresync(CClientPlayer* pPlayer, CClientVehicle* pVehic
             float fSpeed = 0.0f;
             BitStream.Read(fPosition);
             BitStream.ReadBit(bDirection);
-            BitStream.Read(ucTrack);
             BitStream.Read(fSpeed);
+            BitStream.Read(ucTrack);
 
             if (vehicleType == CLIENTVEHICLE_TRAIN)
             {
@@ -1484,9 +1497,10 @@ void CNetAPI::ReadVehiclePuresync(CClientPlayer* pPlayer, CClientVehicle* pVehic
             // Read out the driveby direction
             SDrivebyDirectionSync driveby;
             BitStream.Read(&driveby);
+            eVehicleAimDirection ucDirection = static_cast<eVehicleAimDirection>(driveby.data.ucDirection);
 
             // Set the aiming
-            pPlayer->SetAimingData(TICK_RATE, aim.data.vecTarget, aim.data.fArm, 0.0f, driveby.data.ucDirection, &aim.data.vecOrigin, false);
+            pPlayer->SetAimingData(TICK_RATE, aim.data.vecTarget, aim.data.fArm, 0.0f, ucDirection, &aim.data.vecOrigin, false);
         }
         else
         {
@@ -1546,9 +1560,15 @@ void CNetAPI::WriteVehiclePuresync(CClientPed* pPlayerModel, CClientVehicle* pVe
     pPlayerModel->GetControllerState(ControllerState);
     WriteFullKeysync(ControllerState, BitStream);
 
+    // Use parent model ID for non-standard vehicle model IDs.
+    // This avoids a mismatch between client and server, ensuring doors and damage sync correctly.
+    int iModelID = pVehicle->GetModel();
+    if (iModelID < 400 || iModelID > 611)
+        iModelID = pVehicle->GetModelInfo()->GetParentID();
+
     // Write the clientside model
     if (BitStream.Version() >= 0x05F)
-        BitStream.Write((int)pVehicle->GetModel());
+        BitStream.Write(iModelID);
 
     // Grab the vehicle position
     CVector vecPosition;
@@ -1568,8 +1588,8 @@ void CNetAPI::WriteVehiclePuresync(CClientPed* pPlayerModel, CClientVehicle* pVe
         float fSpeed = pVehicle->GetTrainSpeed();
         BitStream.Write(fPosition);
         BitStream.WriteBit(bDirection);
-        BitStream.Write(ucTrack);
         BitStream.Write(fSpeed);
+        BitStream.Write(ucTrack);
     }
 
     // Write the camera orientation
@@ -1727,7 +1747,7 @@ void CNetAPI::WriteVehiclePuresync(CClientPed* pPlayerModel, CClientVehicle* pVe
             // Sync driveby direction
             CShotSyncData*        pShotsyncData = g_pMultiplayer->GetLocalShotSyncData();
             SDrivebyDirectionSync driveby;
-            driveby.data.ucDirection = static_cast<unsigned char>(pShotsyncData->m_cInVehicleAimDirection);
+            driveby.data.ucDirection = pShotsyncData->m_cInVehicleAimDirection;
             BitStream.Write(&driveby);
         }
     }
@@ -1761,13 +1781,13 @@ bool CNetAPI::ReadSmallKeysync(CControllerState& ControllerState, NetBitStreamIn
     ControllerState.RightShoulder1 = 255 * keys.data.bRightShoulder1;
     short sButtonSquare = 255 * keys.data.bButtonSquare;
     short sButtonCross = 255 * keys.data.bButtonCross;
-    if (BitStream.Version() >= 0x06F)
+    if (BitStream.Can(eBitStreamVersion::AnalogControlSync_AccelBrakeReverse))
     {
         if (keys.data.ucButtonSquare != 0)
             sButtonSquare = (short)keys.data.ucButtonSquare;            // override controller state with analog data if present
 
         if (keys.data.ucButtonCross != 0)
-            sButtonCross = (short)keys.data.ucButtonCross;              // override controller state with analog data if present
+            sButtonCross = (short)keys.data.ucButtonCross;            // override controller state with analog data if present
     }
     ControllerState.ButtonSquare = sButtonSquare;
     ControllerState.ButtonCross = sButtonCross;
@@ -1812,13 +1832,13 @@ bool CNetAPI::ReadFullKeysync(CControllerState& ControllerState, NetBitStreamInt
     ControllerState.RightShoulder1 = 255 * keys.data.bRightShoulder1;
     short sButtonSquare = 255 * keys.data.bButtonSquare;
     short sButtonCross = 255 * keys.data.bButtonCross;
-    if (BitStream.Version() >= 0x06F)
+    if (BitStream.Can(eBitStreamVersion::AnalogControlSync_AccelBrakeReverse))
     {
         if (keys.data.ucButtonSquare != 0)
             sButtonSquare = (short)keys.data.ucButtonSquare;            // override controller state with analog data if present
 
         if (keys.data.ucButtonCross != 0)
-            sButtonCross = (short)keys.data.ucButtonCross;              // override controller state with analog data if present
+            sButtonCross = (short)keys.data.ucButtonCross;            // override controller state with analog data if present
     }
     ControllerState.ButtonSquare = sButtonSquare;
     ControllerState.ButtonCross = sButtonCross;
@@ -1980,11 +2000,15 @@ void CNetAPI::WriteCameraSync(NetBitStreamInterface& BitStream)
     {
         // Write our target
         ElementID      ID = INVALID_ELEMENT_ID;
-        CClientPlayer* pPlayer = pCamera->GetFocusedPlayer();
-        if (!pPlayer)
-            pPlayer = g_pClientGame->GetLocalPlayer();
-        if (!pPlayer->IsLocalEntity())
-            ID = pPlayer->GetID();
+        CClientEntity* pTarget = pCamera->GetFocusedPlayer();
+
+        if (!pTarget)
+            pTarget = pCamera->GetTargetEntity();
+
+        if (!pTarget)
+            pTarget = g_pClientGame->GetLocalPlayer();
+        if (!pTarget->IsLocalEntity())
+            ID = pTarget->GetID();
 
         BitStream.Write(ID);
     }
@@ -2238,6 +2262,8 @@ void CNetAPI::ReadBulletsync(CClientPlayer* pPlayer, NetBitStreamInterface& BitS
     // Read the bulletsync data
     uchar ucWeapon = 0;
     BitStream.Read(ucWeapon);
+    if (!CClientPickupManager::IsValidWeaponID(ucWeapon))
+        return;
     eWeaponType weaponType = (eWeaponType)ucWeapon;
 
     CVector vecStart, vecEnd;

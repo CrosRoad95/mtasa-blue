@@ -10,10 +10,8 @@
 
 #include "StdInc.h"
 
-#include <../game_sa/CAnimBlendHierarchySA.h>
-#include <../game_sa/CAnimBlendStaticAssociationSA.h>
-#include <../game_sa/CAnimBlendAssociationSA.h>
 #include <../game_sa/CAnimBlendAssocGroupSA.h>
+#include <../game_sa/CAnimManagerSA.h>
 
 DWORD FUNC_CAnimBlendAssociation__ReferenceAnimBlock = 0x4CEA50;
 DWORD FUNC_UncompressAnimation = 0x4D41C0;
@@ -27,8 +25,7 @@ DWORD RETURN_CAnimManager_AddAnimationAndSync_NORMAL_FLOW = 0x4D3B3A;
 DWORD RETURN_CAnimManager_AddAnimationAndSync = 0x4D3B4C;
 DWORD RETURN_CAnimManager_BlendAnimation_Hierarchy = 0x4D4577;
 
-auto CAnimBlendAssociation_NewOperator_US = (hCAnimBlendAssociation_NewOperator)0x82119A;
-auto CAnimBlendAssociation_NewOperator_EU = (hCAnimBlendAssociation_NewOperator)0x8211DA;
+auto CAnimBlendAssociation_NewOperator = (hCAnimBlendAssociation_NewOperator)0x82119A;
 
 AddAnimationHandler*            m_pAddAnimationHandler = nullptr;
 AddAnimationAndSyncHandler*     m_pAddAnimationAndSyncHandler = nullptr;
@@ -37,7 +34,7 @@ BlendAnimationHierarchyHandler* m_pBlendAnimationHierarchyHandler = nullptr;
 
 static bool bDisableCallsToCAnimBlendNode = true;
 
-int _cdecl OnCAnimBlendAssocGroupCopyAnimation_FixBadAnim(AssocGroupId* pAnimGroup, int* pAnimId);
+eAnimID _cdecl OnCAnimBlendAssocGroupCopyAnimation_FixBadAnim(eAnimGroup* pAnimGroup, eAnimID* pAnimId);
 
 void CMultiplayerSA::SetAddAnimationHandler(AddAnimationHandler* pHandler)
 {
@@ -64,16 +61,16 @@ void CMultiplayerSA::DisableCallsToCAnimBlendNode(bool bDisableCalls)
     bDisableCallsToCAnimBlendNode = bDisableCalls;
 }
 
-CAnimationStyleDescriptorSAInterface* getAnimStyleDescriptorInterface(AssocGroupId animGroup)
+CAnimationStyleDescriptorSAInterface* getAnimStyleDescriptorInterface(eAnimGroup animGroup)
 {
     auto pAnimAssocDefinitionsArray = (CAnimationStyleDescriptorSAInterface*)0x8AA5A8;
-    return &pAnimAssocDefinitionsArray[animGroup];
+    return &pAnimAssocDefinitionsArray[(int)animGroup];
 }
 
-CAnimBlendAssocGroupSAInterface* getAnimAssocGroupInterface(AssocGroupId animGroup)
+CAnimBlendAssocGroupSAInterface* getAnimAssocGroupInterface(eAnimGroup animGroup)
 {
     auto pAnimGroupArray = reinterpret_cast<CAnimBlendAssocGroupSAInterface*>(*(DWORD*)0xb4ea34);
-    return &pAnimGroupArray[animGroup];
+    return &pAnimGroupArray[(int)animGroup];
 }
 
 void _declspec(naked) HOOK_CAnimBlendAssociation_SetCurrentTime()
@@ -126,10 +123,8 @@ void _declspec(naked) HOOK_RpAnimBlendClumpUpdateAnimations()
     }
 }
 
-CAnimBlendAssociationSAInterface* __cdecl CAnimBlendAssocGroup_CopyAnimation(RpClump* pClump, AssocGroupId u32AnimGroupID, AnimationId animID)
+CAnimBlendAssociationSAInterface* __cdecl CAnimBlendAssocGroup_CopyAnimation(RpClump* pClump, eAnimGroup u32AnimGroupID, eAnimID animID)
 {
-    auto CAnimBlendAssociation_NewOperator =
-        pGameInterface->GetGameVersion() == VERSION_EU_10 ? CAnimBlendAssociation_NewOperator_EU : CAnimBlendAssociation_NewOperator_US;
     auto pAnimAssociationInterface =
         reinterpret_cast<CAnimBlendAssociationSAInterface*>(CAnimBlendAssociation_NewOperator(sizeof(CAnimBlendAssociationSAInterface)));
 

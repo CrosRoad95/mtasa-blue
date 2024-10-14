@@ -16,6 +16,9 @@
 
 using namespace std;
 
+void WaitForKey(int iKey);
+void Print(const char* szFormat, ...);
+
 CModManagerImpl::CModManagerImpl(CServerImpl* pServer)
 {
     // Init
@@ -127,7 +130,7 @@ void CModManagerImpl::Unload(bool bKeyPressBeforeTerm)
                 Print("Press Q to shut down the server!\n");
                 WaitForKey('q');
             }
-            TerminateProcess(GetCurrentProcess(), 0);
+            TerminateProcess(GetCurrentProcess(), GetExitCode());
         }
 #endif
         // Unload the library
@@ -143,6 +146,11 @@ void CModManagerImpl::DoPulse()
         // Pulse the mod
         m_pBase->DoPulse();
     }
+}
+
+bool CModManagerImpl::IsReadyToAcceptConnections() const noexcept
+{
+    return (m_pBase != nullptr) && m_pBase->IsReadyToAcceptConnections();
 }
 
 bool CModManagerImpl::IsFinished()
@@ -177,6 +185,16 @@ bool CModManagerImpl::GetSleepIntervals(int& iSleepBusyMs, int& iSleepIdleMs, in
     }
 
     return false;
+}
+
+void CModManagerImpl::SetExitCode(int exitCode)
+{
+    m_pServer->SetExitCode(exitCode);
+}
+
+int CModManagerImpl::GetExitCode() const
+{
+    return m_pServer->GetExitCode();
 }
 
 void CModManagerImpl::GetTag(char* szInfoTag, int iInfoTag)

@@ -21,7 +21,7 @@ enum {SOLID_NONE=0,SOLID_NORMAL=1,SOLID_COUNT=2,SOLID_FILEEXT=4,
 enum {ARCTIME_NONE=0,ARCTIME_KEEP,ARCTIME_LATEST};
 
 enum EXTTIME_MODE {
-  EXTTIME_NONE=0,EXTTIME_1S,EXTTIME_HIGH1,EXTTIME_HIGH2,EXTTIME_HIGH3
+  EXTTIME_NONE=0,EXTTIME_1S,EXTTIME_MAX
 };
 
 enum {NAMES_ORIGINALCASE=0,NAMES_UPPERCASE,NAMES_LOWERCASE};
@@ -33,7 +33,7 @@ enum RECURSE_MODE
   RECURSE_NONE=0,    // no recurse switches
   RECURSE_DISABLE,   // switch -r-
   RECURSE_ALWAYS,    // switch -r
-  RECURSE_WILDCARDS, // switch -r0
+  RECURSE_WILDCARDS  // switch -r0
 };
 
 enum OVERWRITE_MODE 
@@ -45,13 +45,25 @@ enum OVERWRITE_MODE
   OVERWRITE_FORCE_ASK
 };
 
+enum ARC_METADATA
+{
+  ARCMETA_NONE=0,
+  ARCMETA_SAVE,    // -ams
+  ARCMETA_RESTORE  // -amr
+};
 
 enum QOPEN_MODE { QOPEN_NONE, QOPEN_AUTO, QOPEN_ALWAYS };
 
 enum RAR_CHARSET { RCH_DEFAULT=0,RCH_ANSI,RCH_OEM,RCH_UNICODE,RCH_UTF8 };
 
 #define     MAX_FILTER_TYPES           16
-enum FilterState {FILTER_DEFAULT=0,FILTER_AUTO,FILTER_FORCE,FILTER_DISABLE};
+
+enum FilterState {
+  FILTER_DEFAULT=0, // No -mc<filter> switch.
+  FILTER_AUTO,      // -mc<filter> switch is present.
+  FILTER_FORCE,     // -mc<filter>+ switch is present.
+  FILTER_DISABLE    // -mc<filter>- switch is present.
+};
 
 
 enum SAVECOPY_MODE {
@@ -61,7 +73,8 @@ enum SAVECOPY_MODE {
 
 enum APPENDARCNAME_MODE
 {
-  APPENDARCNAME_NONE=0,APPENDARCNAME_DESTPATH,APPENDARCNAME_OWNDIR
+  APPENDARCNAME_NONE=0,APPENDARCNAME_DESTPATH,APPENDARCNAME_OWNSUBDIR,
+  APPENDARCNAME_OWNDIR
 };
 
 enum POWER_MODE {
@@ -83,39 +96,42 @@ struct FilterMode
 #define MAX_GENERATE_MASK  128
 
 
+// Here we store simple data types, which we can clear and move all together
+// quickly. Rest of data types goes to CommandData.
 class RAROptions
 {
   public:
     RAROptions();
-    ~RAROptions();
     void Init();
+
 
     uint ExclFileAttr;
     uint InclFileAttr;
+
+    // We handle -ed and -e+d with special flags instead of attribute mask,
+    // so it works with both Windows and Unix archives.
+    bool ExclDir;
+    bool InclDir;
+
     bool InclAttrSet;
-    size_t WinSize;
-    wchar TempPath[NM];
-    wchar SFXModule[NM];
+    uint64 WinSize;
+    uint64 WinSizeLimit; // Switch -mdx<size>.
 
 #ifdef USE_QOPEN
     QOPEN_MODE QOpenMode;
 #endif
 
     bool ConfigDisabled; // Switch -cfg-.
-    wchar ExtrPath[NM];
-    wchar CommentFile[NM];
     RAR_CHARSET CommentCharset;
     RAR_CHARSET FilelistCharset;
     RAR_CHARSET ErrlogCharset;
     RAR_CHARSET RedirectCharset;
 
-    wchar ArcPath[NM];
-    SecPassword Password;
     bool EncryptHeaders;
+    bool SkipEncrypted;
     
     bool ManualPassword; // Password entered manually during operation, might need to clean for next archive.
 
-    wchar LogName[NM];
     MESSAGE_TYPE MsgStream;
     SOUND_NOTIFY_MODE Sound;
     OVERWRITE_MODE Overwrite;
@@ -123,9 +139,11 @@ class RAROptions
     HASH_TYPE HashType;
     int Recovery;
     int RecVolNumber;
+    ARC_METADATA ArcMetadata;
     bool DisablePercentage;
     bool DisableCopyright;
     bool DisableDone;
+    bool DisableNames;
     bool PrintVersion;
     int Solid;
     int SolidCount;
@@ -137,10 +155,9 @@ class RAROptions
     PATH_EXCL_MODE ExclPath;
     RECURSE_MODE Recurse;
     int64 VolSize;
-    Array<int64> NextVolSizes;
     uint CurVolNum;
     bool AllYes;
-    bool MoreInfo; // -im, show more information, used only in "WinRAR t" now.
+    bool VerboseOutput; // -iv, display verbose output, used only in "WinRAR t" now.
     bool DisableSortSolid;
     int ArcTime;
     int ConvertNames;
@@ -148,6 +165,7 @@ class RAROptions
     bool SaveSymLinks;
     bool SaveHardLinks;
     bool AbsoluteLinks;
+    bool SkipSymLinks;
     int Priority;
     int SleepTime;
     bool KeepBroken;
@@ -162,6 +180,7 @@ class RAROptions
 #ifndef SFX_MODULE
     bool GenerateArcName;
     wchar GenerateMask[MAX_GENERATE_MASK];
+    wchar DefGenerateMask[MAX_GENERATE_MASK];
 #endif
     bool SyncFiles;
     bool ProcessEA;
@@ -178,14 +197,13 @@ class RAROptions
     bool Test;
     bool VolumePause;
     FilterMode FilterModes[MAX_FILTER_TYPES];
-    wchar EmailTo[NM];
     uint VersionControl;
     APPENDARCNAME_MODE AppendArcNameToPath;
     POWER_MODE Shutdown;
     EXTTIME_MODE xmtime; // Extended time modes (time precision to store).
     EXTTIME_MODE xctime;
     EXTTIME_MODE xatime;
-    wchar CompressStdin[NM];
+    bool PreserveAtime;
 
     uint Threads; // We use it to init hash even if RAR_SMP is not defined.
 
@@ -194,7 +212,6 @@ class RAROptions
 
 
 #ifdef RARDLL
-    wchar DllDestName[NM];
     int DllOpMode;
     int DllError;
     LPARAM UserData;
@@ -202,5 +219,6 @@ class RAROptions
     CHANGEVOLPROC ChangeVolProc;
     PROCESSDATAPROC ProcessDataProc;
 #endif
+
 };
 #endif

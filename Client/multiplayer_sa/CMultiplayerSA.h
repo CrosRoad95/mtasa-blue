@@ -12,9 +12,7 @@
 #pragma once
 
 #include <game/CGame.h>
-#include <multiplayer/CMultiplayer.h>
 
-#include "CPopulationSA.h"
 #include "multiplayersa_init.h"
 #include "CLimitsSA.h"
 
@@ -22,6 +20,7 @@
 
 class CRemoteDataSA;
 #define DEFAULT_NEAR_CLIP_DISTANCE  ( 0.3f )
+#define DEFAULT_SHADOWS_OFFSET      ( 0.013f ) // GTA default = 0.06f
 
 enum eRadioStationID
 {
@@ -47,7 +46,6 @@ class CMultiplayerSA : public CMultiplayer
 
 private:
     CRemoteDataSA* RemoteData;
-    CPopulationSA* Population;
 
 public:
     ZERO_ON_NEW
@@ -66,7 +64,9 @@ public:
     void                InitHooks_Files();
     void                InitHooks_Weapons();
     void                InitHooks_Peds();
+    void                InitHooks_ObjectCollision();
     void                InitHooks_VehicleCollision();
+    void                InitHooks_VehicleDummies();
     void                InitHooks_Vehicles();
     void                InitHooks_Rendering();
     void                InitHooks_LicensePlate();
@@ -75,6 +75,11 @@ public:
     void                InitHooks_VehicleWeapons();
     void                InitHooks_Direct3D();
     void                InitHooks_FixLineOfSightArgs();
+    void                InitHooks_Streaming();
+    void                InitHooks_FrameRateFixes();
+    void                InitHooks_ProjectileCollisionFix();
+    void                InitHooks_ObjectStreamerOptimization();
+    void                InitHooks_Postprocess();
     CRemoteDataStorage* CreateRemoteDataStorage();
     void                DestroyRemoteDataStorage(CRemoteDataStorage* pData);
     void                AddRemoteDataStorage(CPlayerPed* pPed, CRemoteDataStorage* pData);
@@ -84,17 +89,16 @@ public:
 
     CPed* GetContextSwitchedPed();
 
-    CPopulationMP* GetPopulationMP() { return Population; }
-    void           PreventLeavingVehicles();
-    void           HideRadar(bool bHide);
-    void           SetCenterOfWorld(CEntity* entity, CVector* vecPosition, FLOAT fHeading);
-    void           DisablePadHandler(bool bDisabled);
-    void           DisableEnterExitVehicleKey(bool bDisabled);
-    void           DisableAllVehicleWeapons(bool bDisable);
-    void           DisableBirds(bool bDisabled);
-    void           DisableQuickReload(bool bDisable);
-    void           DisableCloseRangeDamage(bool bDisable);
-    void           DisableBadDrivebyHitboxes(bool bDisable) { m_bBadDrivebyHitboxesDisabled = bDisable; }
+    void PreventLeavingVehicles();
+    void HideRadar(bool bHide);
+    void SetCenterOfWorld(CEntity* entity, CVector* vecPosition, FLOAT fHeading);
+    void DisablePadHandler(bool bDisabled);
+    void DisableEnterExitVehicleKey(bool bDisabled);
+    void DisableAllVehicleWeapons(bool bDisable);
+    void DisableBirds(bool bDisabled);
+    void DisableQuickReload(bool bDisable);
+    void DisableCloseRangeDamage(bool bDisable);
+    void DisableBadDrivebyHitboxes(bool bDisable) { m_bBadDrivebyHitboxesDisabled = bDisable; }
 
     bool GetExplosionsDisabled();
     void DisableExplosions(bool bDisabled);
@@ -109,8 +113,10 @@ public:
     void SetChokingHandler(ChokingHandler* pChokingHandler);
     void SetPreWorldProcessHandler(PreWorldProcessHandler* pHandler);
     void SetPostWorldProcessHandler(PostWorldProcessHandler* pHandler);
+    void SetPostWorldProcessPedsAfterPreRenderHandler(PostWorldProcessPedsAfterPreRenderHandler* pHandler);
     void SetIdleHandler(IdleHandler* pHandler);
     void SetPreFxRenderHandler(PreFxRenderHandler* pHandler);
+    void SetPostColorFilterRenderHandler(PostColorFilterRenderHandler* pHandler) override;
     void SetPreHudRenderHandler(PreHudRenderHandler* pHandler);
     void DisableCallsToCAnimBlendNode(bool bDisableCalls);
     void SetCAnimBlendAssocDestructorHandler(CAnimBlendAssocDestructorHandler* pHandler);
@@ -137,6 +143,7 @@ public:
     void SetDrivebyAnimationHandler(DrivebyAnimationHandler* pHandler);
     void SetPedStepHandler(PedStepHandler* pHandler);
     void SetVehicleWeaponHitHandler(VehicleWeaponHitHandler* pHandler) override;
+    void SetAudioZoneRadioSwitchHandler(AudioZoneRadioSwitchHandler* pHandler);
 
     void  AllowMouseMovement(bool bAllow);
     void  DoSoundHacksOnLostFocus(bool bLostFocus);
@@ -147,6 +154,11 @@ public:
                       unsigned char BottomBlue);
     void  SetHeatHaze(const SHeatHazeSettings& settings);
     void  GetHeatHaze(SHeatHazeSettings& settings);
+    void  ResetColorFilter();
+    void  SetColorFilter(DWORD dwPass0Color, DWORD dwPass1Color);
+    void  GetColorFilter(DWORD& dwPass0Color, DWORD& dwPass1Color, bool isOriginal);
+    void  SetGrainMultiplier(eGrainMultiplierType type, float fMultiplier);
+    void  SetGrainLevel(BYTE ucLevel);
     void  ResetHeatHaze();
     void  SetHeatHazeEnabled(bool bEnabled);
     void  ApplyHeatHazeEnabled();
@@ -185,6 +197,58 @@ public:
     int   GetMoonSize();
     void  ResetMoonSize();
 
+    void  GetAmbientColor(float& red, float& green, float& blue) const;
+    bool  SetAmbientColor(float red, float green, float blue);
+    bool  ResetAmbientColor();
+
+    void  GetAmbientObjectColor(float& red, float& green, float& blue) const;
+    bool  SetAmbientObjectColor(float red, float green, float blue);
+    bool  ResetAmbientObjectColor();
+
+    void  GetDirectionalColor(float& red, float& green, float& blue) const;
+    bool  SetDirectionalColor(float red, float green, float blue);
+    bool  ResetDirectionalColor();
+
+    float GetSpriteSize() const;
+    bool  SetSpriteSize(float size);
+    bool  ResetSpriteSize();
+
+    float GetSpriteBrightness() const;
+    bool  SetSpriteBrightness(float brightness);
+    bool  ResetSpriteBrightness();
+
+    int16 GetPoleShadowStrength() const;
+    bool  SetPoleShadowStrength(int16 strength);
+    bool  ResetPoleShadowStrength();
+
+    int16 GetShadowStrength() const;
+    bool  SetShadowStrength(int16 strength);
+    bool  ResetShadowStrength();
+
+    float GetShadowsOffset() const;
+    bool  SetShadowsOffset(float offset);
+    bool  ResetShadowsOffset();
+
+    float GetLightsOnGroundBrightness() const;
+    bool  SetLightsOnGroundBrightness(float brightness);
+    bool  ResetLightsOnGroundBrightness();
+
+    void  GetLowCloudsColor(int16& red, int16& green, int16& blue) const;
+    bool  SetLowCloudsColor(int16 red, int16 green, int16 blue);
+    bool  ResetLowCloudsColor();
+
+    void  GetBottomCloudsColor(int16& red, int16& green, int16& blue) const;
+    bool  SetBottomCloudsColor(int16 red, int16 green, int16 blue);
+    bool  ResetBottomCloudsColor();
+
+    float GetCloudsAlpha1() const;
+    bool  SetCloudsAlpha1(float alpha);
+    bool  ResetCloudsAlpha1();
+
+    float GetIllumination() const;
+    bool  SetIllumination(float illumination);
+    bool  ResetIllumination();
+
     void SetNightVisionEnabled(bool bEnabled, bool bNoiseEnabled);
     void SetThermalVisionEnabled(bool bEnabled, bool bNoiseEnabled);
     bool IsNightVisionEnabled();
@@ -204,6 +268,7 @@ public:
     void SetRender3DStuffHandler(Render3DStuffHandler* pHandler);
     void SetPreRenderSkyHandler(PreRenderSkyHandler* pHandler);
     void SetRenderHeliLightHandler(RenderHeliLightHandler* pHandler);
+    void SetRenderEverythingBarRoadsHandler(RenderEverythingBarRoadsHandler* pHandler) override;
 
     void Reset();
 
@@ -246,8 +311,7 @@ public:
 
     CLimits* GetLimits() { return &m_limits; }
 
-    void SetSuspensionEnabled(bool bEnabled);
-    bool IsSuspensionEnabled() { return m_bSuspensionEnabled; };
+    void UpdateVehicleSuspension() noexcept;
 
     virtual void FlushClothesCache();
     virtual void SetFastClothesLoading(EFastClothesLoading fastClothesLoading);
@@ -278,15 +342,19 @@ public:
     void SetBoatWaterSplashEnabled(bool bEnabled);
     void SetTyreSmokeEnabled(bool bEnabled);
 
-    void SetLastStaticAnimationPlayed(DWORD dwGroupID, DWORD dwAnimID, DWORD dwAnimArrayAddress)
+    void SetLastStaticAnimationPlayed(eAnimGroup dwGroupID, eAnimID dwAnimID, DWORD dwAnimArrayAddress)
     {
         m_dwLastStaticAnimGroupID = dwGroupID;
         m_dwLastStaticAnimID = dwAnimID;
         m_dwLastAnimArrayAddress = dwAnimArrayAddress;
     }
-    DWORD GetLastStaticAnimationGroupID() { return m_dwLastStaticAnimGroupID; }
-    DWORD GetLastStaticAnimationID() { return m_dwLastStaticAnimID; }
-    DWORD GetLastAnimArrayAddress() { return m_dwLastAnimArrayAddress; }
+    eAnimGroup GetLastStaticAnimationGroupID() { return m_dwLastStaticAnimGroupID; }
+    eAnimID    GetLastStaticAnimationID() { return m_dwLastStaticAnimID; }
+    DWORD      GetLastAnimArrayAddress() { return m_dwLastAnimArrayAddress; }
+
+    unsigned int EntryInfoNodePool_NoOfUsedSpaces() const noexcept override;
+    unsigned int PtrNodeSingleLinkPool_NoOfUsedSpaces() const noexcept override;
+    unsigned int PtrNodeDoubleLinkPool_NoOfUsedSpaces() const noexcept override;
 
     CVector      m_vecAkimboTarget;
     bool         m_bAkimboTargetUp;
@@ -294,7 +362,6 @@ public:
     bool         m_bBadDrivebyHitboxesDisabled;
 
 private:
-    bool                m_bSuspensionEnabled;
     std::vector<char>   m_PlayerImgCache;
     EFastClothesLoading m_FastClothesLoading;
     CLimitsSA           m_limits;
@@ -308,9 +375,10 @@ private:
     bool                m_bHeatHazeCustomized;
     float               m_fNearClipDistance;
     float               m_fMaddDoggPoolLevel;
-    DWORD               m_dwLastStaticAnimGroupID;
-    DWORD               m_dwLastStaticAnimID;
+    eAnimGroup          m_dwLastStaticAnimGroupID;
+    eAnimID             m_dwLastStaticAnimID;
     DWORD               m_dwLastAnimArrayAddress;
+    float               m_fShadowsOffset;
 
     /*  VOID                        SetPlayerShotVectors(CPlayerPed* player, Vector3D * vecTarget, Vector3D * vecStart);
         VOID                        SetPlayerCameraVectors(CPlayerPed* player, Vector3D * vecSource, Vector3D * vecFront);
@@ -323,35 +391,4 @@ private:
     WORD                        GetInVehicleLocalPlayerKeyStates();*/
     //  Vector3D                    * GetLocalStartVector();
     //  VOID                        SetPlayerStartVector(CPlayerPed* player, Vector3D * vecStart);
-
-private:
-    static unsigned long HOOKPOS_FindPlayerCoors;
-    static unsigned long HOOKPOS_FindPlayerCentreOfWorld;
-    static unsigned long HOOKPOS_FindPlayerHeading;
-    static unsigned long HOOKPOS_CStreaming_Update_Caller;
-    static unsigned long HOOKPOS_CHud_Draw_Caller;
-    static unsigned long HOOKPOS_CRunningScript_Process;
-    static unsigned long HOOKPOS_CExplosion_AddExplosion;
-    static unsigned long HOOKPOS_CRealTimeShadowManager__ReturnRealTimeShadow;
-    static unsigned long HOOKPOS_CCustomRoadsignMgr__RenderRoadsignAtomic;
-    static unsigned long HOOKPOS_Trailer_BreakTowLink;
-    static unsigned long HOOKPOS_CRadar__DrawRadarGangOverlay;
-    static unsigned long HOOKPOS_CTaskComplexJump__CreateSubTask;
-    static unsigned long HOOKPOS_CTrain_ProcessControl_Derail;
-    static unsigned long HOOKPOS_CVehicle_SetupRender;
-    static unsigned long HOOKPOS_CVehicle_ResetAfterRender;
-    static unsigned long HOOKPOS_CObject_Render;
-    static unsigned long HOOKPOS_EndWorldColors;
-    static unsigned long HOOKPOS_CWorld_ProcessVerticalLineSectorList;
-    static unsigned long HOOKPOS_ComputeDamageResponse_StartChoking;
-    static unsigned long HOOKPOS_CAutomobile__ProcessSwingingDoor;
-
-    static unsigned long FUNC_CStreaming_Update;
-    static unsigned long FUNC_CAudioEngine__DisplayRadioStationName;
-    static unsigned long FUNC_CHud_Draw;
-
-    static unsigned long ADDR_CursorHiding;
-    static unsigned long ADDR_GotFocus;
-
-    static unsigned long FUNC_CPlayerInfoBase;
 };

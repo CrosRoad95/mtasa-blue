@@ -10,6 +10,8 @@
 
 #pragma once
 #include "CLuaDefs.h"
+#include "CVector.h"
+#include <lua/CLuaMultiReturn.h>
 
 class CLuaPedDefs : public CLuaDefs
 {
@@ -21,12 +23,13 @@ public:
     LUA_DECLARE(KillPed);
     LUA_DECLARE(DetonateSatchels);
 
+    static bool ResetPedVoice(CClientPed* ped);
     LUA_DECLARE(GetPedVoice);
     LUA_DECLARE(SetPedVoice);
     LUA_DECLARE(GetPedTarget);
-    LUA_DECLARE(GetPedTargetStart);
-    LUA_DECLARE(GetPedTargetEnd);
-    LUA_DECLARE(GetPedTargetCollision);
+    LUA_DECLARE_OOP(GetPedTargetStart);
+    LUA_DECLARE_OOP(GetPedTargetEnd);
+    LUA_DECLARE_OOP(GetPedTargetCollision);
     LUA_DECLARE(GetPedWeaponSlot);
     LUA_DECLARE(GetPedWeapon);
     LUA_DECLARE(GetPedAmmoInClip);
@@ -47,6 +50,19 @@ public:
     LUA_DECLARE(GetPedContactElement);
     LUA_DECLARE(GetPedRotation);
     LUA_DECLARE(CanPedBeKnockedOffBike);
+    static bool SetElementBonePosition(lua_State* const luaVM, CClientPed* entity, std::uint32_t boneId, CVector position);
+    static bool SetElementBoneRotation(lua_State* const luaVM, CClientPed* entity, std::uint32_t boneId, float yaw, float pitch, float roll);
+    static bool SetElementBoneQuaternion(lua_State* const luaVM, CClientPed* entity, std::uint32_t boneId, float x, float y, float z, float w);
+    static std::variant<bool, CLuaMultiReturn<float, float, float>> GetElementBonePosition(lua_State* const luaVM, CClientPed* entity, std::uint32_t boneId);
+
+    static std::variant<bool, CLuaMultiReturn<float, float, float>> GetElementBoneRotation(lua_State* const luaVM, CClientPed* entity, std::uint32_t boneId);
+    static std::variant<bool, CLuaMultiReturn<float, float, float, float>> GetElementBoneQuaternion(lua_State* const luaVM, CClientPed* entity, std::uint32_t boneId);
+
+    static bool SetElementBoneMatrix(lua_State* const luaVM, CClientPed* entity, std::uint32_t boneId, CMatrix boneMatrix);
+
+    static std::variant<bool, std::array<std::array<float, 4>, 4>> GetElementBoneMatrix(lua_State* const luaVM, CClientPed* entity, std::uint32_t boneId);
+
+    static bool UpdateElementRpHAnim(lua_State* const luaVM, CClientEntity* entity);
     LUA_DECLARE_OOP(GetPedBonePosition);
     LUA_DECLARE(GetPedClothes);
     LUA_DECLARE(GetPedControlState);
@@ -71,7 +87,7 @@ public:
     LUA_DECLARE(SetPedAnimationProgress);
     LUA_DECLARE(SetPedAnimationSpeed);
     LUA_DECLARE(SetPedMoveAnim);
-    LUA_DECLARE(SetPedArmor);
+    static bool SetPedArmor(CClientPed* const ped, const float armor);
     LUA_DECLARE(SetPedWeaponSlot);
     LUA_DECLARE(GivePedWeapon);
     LUA_DECLARE(IsPedReloadingWeapon);
@@ -80,7 +96,7 @@ public:
     LUA_DECLARE(SetPedControlState);
     LUA_DECLARE(SetPedAnalogControlState);
     LUA_DECLARE(SetPedDoingGangDriveby);
-    LUA_DECLARE(SetPedFightingStyle);
+    static bool SetPedFightingStyle(CClientEntity* const entity, const unsigned int style);
     LUA_DECLARE(SetPedLookAt);
     LUA_DECLARE(SetPedHeadless);
     LUA_DECLARE(SetPedFrozen);
@@ -92,4 +108,8 @@ public:
     LUA_DECLARE(RemovePedFromVehicle);
     LUA_DECLARE(SetPedOxygenLevel);
     LUA_DECLARE(SetPedStat);
+    static bool SetPedEnterVehicle(CClientPed* pPed, std::optional<CClientVehicle*> pOptVehicle, std::optional<bool> bOptPassenger);
+    static bool SetPedExitVehicle(CClientPed* pPed);
+    static bool IsPedBleeding(CClientPed* ped);
+    static bool SetPedBleeding(CClientPed* ped, bool bleeding);
 };

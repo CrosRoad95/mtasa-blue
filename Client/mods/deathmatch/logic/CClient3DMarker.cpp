@@ -9,6 +9,8 @@
  *****************************************************************************/
 
 #include <StdInc.h>
+#include <game/C3DMarkers.h>
+#include <game/CVisibilityPlugins.h>
 
 extern CClientGame* g_pClientGame;
 
@@ -99,4 +101,12 @@ void CClient3DMarker::DoPulse()
             g_pGame->GetVisibilityPlugins()->SetClumpAlpha((RpClump*)m_pMarker->GetRwObject(), m_Color.A);
         }
     }
+}
+
+void CClient3DMarker::SetColor(const SColor& color) noexcept
+{
+    m_Color = color;
+
+    if (!m_ignoreAlphaLimits && m_dwType == MARKER3D_ARROW)
+        m_Color.A = 255;
 }

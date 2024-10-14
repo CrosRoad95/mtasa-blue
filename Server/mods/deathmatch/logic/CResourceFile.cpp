@@ -14,6 +14,11 @@
 // map or script.
 
 #include "StdInc.h"
+#include "CResourceFile.h"
+#include "CResource.h"
+#include <core/CServerInterface.h>
+
+extern CServerInterface* g_pServerInterface;
 
 CResourceFile::CResourceFile(CResource* resource, const char* szShortName, const char* szResourceFileName, CXMLAttributes* xmlAttributes)
 {
@@ -51,7 +56,7 @@ CResourceFile::~CResourceFile()
 {
 }
 
-ResponseCode CResourceFile::Request(HttpRequest* ipoHttpRequest, HttpResponse* ipoHttpResponse)
+HttpStatusCode CResourceFile::Request(HttpRequest* ipoHttpRequest, HttpResponse* ipoHttpResponse)
 {
     // HACK - Use http-client-files if possible as the resources directory may have been changed since the resource was loaded.
     SString strDstFilePath = GetCachedPathFilename();
@@ -79,12 +84,12 @@ ResponseCode CResourceFile::Request(HttpRequest* ipoHttpRequest, HttpResponse* i
         ipoHttpResponse->oResponseHeaders["content-type"] = "application/octet-stream";            // not really the right mime-type
         ipoHttpResponse->SetBody(szBuffer, lBufferLength);
         delete[] szBuffer;
-        return HTTPRESPONSECODE_200_OK;
+        return HTTP_STATUS_CODE_200_OK;
     }
     else
     {
         ipoHttpResponse->SetBody("Can't read file!", strlen("Can't read file!"));
-        return HTTPRESPONSECODE_500_INTERNALSERVERERROR;
+        return HTTP_STATUS_CODE_500_INTERNAL_SERVER_ERROR;
     }
 }
 

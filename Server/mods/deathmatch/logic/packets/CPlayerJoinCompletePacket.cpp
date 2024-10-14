@@ -10,11 +10,14 @@
  *****************************************************************************/
 
 #include "StdInc.h"
+#include "CPlayerJoinCompletePacket.h"
+#include "CGame.h"
+#include "CMainConfig.h"
+#include <net/SyncStructures.h>
 
 CPlayerJoinCompletePacket::CPlayerJoinCompletePacket()
 {
     m_PlayerID = INVALID_ELEMENT_ID;
-    m_ucNumberOfPlayers = 0;
     m_RootElementID = INVALID_ELEMENT_ID;
     m_ucHTTPDownloadType = HTTP_DOWNLOAD_DISABLED;
     m_usHTTPDownloadPort = 0;
@@ -24,15 +27,15 @@ CPlayerJoinCompletePacket::CPlayerJoinCompletePacket()
     m_ucSampleRate = 1;
     m_ucQuality = 4;
     m_uiBitrate = 0;
+    m_szServerName = "";
 }
 
-CPlayerJoinCompletePacket::CPlayerJoinCompletePacket(ElementID PlayerID, unsigned char ucNumberOfPlayers, ElementID RootElementID,
-                                                     eHTTPDownloadType ucHTTPDownloadType, unsigned short usHTTPDownloadPort, const char* szHTTPDownloadURL,
-                                                     int iHTTPMaxConnectionsPerClient, int iEnableClientChecks, bool bVoiceEnabled, unsigned char ucSampleRate,
-                                                     unsigned char ucVoiceQuality, unsigned int uiBitrate)
+CPlayerJoinCompletePacket::CPlayerJoinCompletePacket(ElementID PlayerID, ElementID RootElementID, eHTTPDownloadType ucHTTPDownloadType,
+                                                     unsigned short usHTTPDownloadPort, const char* szHTTPDownloadURL, int iHTTPMaxConnectionsPerClient,
+                                                     int iEnableClientChecks, bool bVoiceEnabled, unsigned char ucSampleRate, unsigned char ucVoiceQuality,
+                                                     unsigned int uiBitrate, const char* szServerName)
 {
     m_PlayerID = PlayerID;
-    m_ucNumberOfPlayers = ucNumberOfPlayers;
     m_RootElementID = RootElementID;
     m_ucHTTPDownloadType = ucHTTPDownloadType;
     m_iHTTPMaxConnectionsPerClient = iHTTPMaxConnectionsPerClient;
@@ -41,6 +44,7 @@ CPlayerJoinCompletePacket::CPlayerJoinCompletePacket(ElementID PlayerID, unsigne
     m_ucSampleRate = ucSampleRate;
     m_ucQuality = ucVoiceQuality;
     m_uiBitrate = uiBitrate;
+    m_szServerName = szServerName;
 
     switch (m_ucHTTPDownloadType)
     {
@@ -59,7 +63,13 @@ CPlayerJoinCompletePacket::CPlayerJoinCompletePacket(ElementID PlayerID, unsigne
 bool CPlayerJoinCompletePacket::Write(NetBitStreamInterface& BitStream) const
 {
     BitStream.Write(m_PlayerID);
-    BitStream.Write(m_ucNumberOfPlayers);
+
+    // For protocol backwards compatibility: write a non-zero single byte value.
+    // This used to hold the number of players, it was never used on the client side,
+    // and it caused protocol error 14 whenever the value wrapped back to zero (uint32_t -> uint8_t).
+    uint8_t numPlayers = 1;
+    BitStream.Write(numPlayers);
+
     BitStream.Write(m_RootElementID);
 
     // Transmit server requirement for the client to check settings
@@ -80,7 +90,7 @@ bool CPlayerJoinCompletePacket::Write(NetBitStreamInterface& BitStream) const
     BitStream.WriteCompressed(m_uiBitrate);
 
     // fakelag command enabled
-    if (BitStream.Version() >= 0x06A)
+    if (BitStream.Can(eBitStreamVersion::FakeLagCommand))
     {
         BitStream.WriteBit(g_pGame->GetConfig()->IsFakeLagCommandEnabled());
     }
@@ -111,6 +121,9 @@ bool CPlayerJoinCompletePacket::Write(NetBitStreamInterface& BitStream) const
         default:
             break;
     }
+
+    if (BitStream.Can(eBitStreamVersion::CPlayerJoinCompletePacket_ServerName))
+        BitStream.WriteString(m_szServerName);
 
     return true;
 }

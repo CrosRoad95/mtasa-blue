@@ -12,7 +12,7 @@
 
 NAMESPACE_BEGIN(CryptoPP)
 
-#if (defined(_MSC_VER) && (_MSC_VER < 1400)) && !defined(__MWERKS__)
+#if (defined(CRYPTOPP_MSC_VERSION) && (CRYPTOPP_MSC_VERSION < 1400)) && !defined(__MWERKS__)
 	// VC60 and VC7 workaround: built-in std::reverse_iterator has two template parameters, Dinkumware only has one
 	typedef std::reverse_bidirectional_iterator<unsigned int *, unsigned int> RevIt;
 #elif defined(_RWSTD_NO_CLASS_PARTIAL_SPEC)
@@ -98,11 +98,17 @@ HuffmanEncoder::HuffmanEncoder(const unsigned int *codeBits, unsigned int nCodes
 
 struct HuffmanNode
 {
-	// Coverity finding on uninitialized 'symbol' member
 	HuffmanNode()
 		: symbol(0), parent(0) {}
 	HuffmanNode(const HuffmanNode& rhs)
 		: symbol(rhs.symbol), parent(rhs.parent) {}
+	HuffmanNode& operator=(const HuffmanNode& rhs)
+	{
+		// No this guard
+		symbol = rhs.symbol;
+		parent = rhs.parent;
+		return *this;
+	}
 
 	size_t symbol;
 	union {size_t parent; unsigned depth, freq;};
@@ -233,7 +239,7 @@ Deflator::Deflator(BufferedTransformation *attachment, int deflateLevel, int log
 	, m_deflateLevel(-1)
 {
 	InitializeStaticEncoders();
-	IsolatedInitialize(MakeParameters("DeflateLevel", deflateLevel)("Log2WindowSize", log2WindowSize)("DetectUncompressible", detectUncompressible));
+	Deflator::IsolatedInitialize(MakeParameters("DeflateLevel", deflateLevel)("Log2WindowSize", log2WindowSize)("DetectUncompressible", detectUncompressible));
 }
 
 Deflator::Deflator(const NameValuePairs &parameters, BufferedTransformation *attachment)
@@ -241,7 +247,7 @@ Deflator::Deflator(const NameValuePairs &parameters, BufferedTransformation *att
 	, m_deflateLevel(-1)
 {
 	InitializeStaticEncoders();
-	IsolatedInitialize(parameters);
+	Deflator::IsolatedInitialize(parameters);
 }
 
 void Deflator::InitializeStaticEncoders()
@@ -346,7 +352,7 @@ unsigned int Deflator::FillWindow(const byte *str, size_t length)
 		if (m_blockStart < DSIZE)
 			EndBlock(false);
 
-		memcpy(m_byteBuffer, m_byteBuffer + DSIZE, DSIZE);
+		std::memcpy(m_byteBuffer, m_byteBuffer + DSIZE, DSIZE);
 
 		m_dictionaryEnd = m_dictionaryEnd < DSIZE ? 0 : m_dictionaryEnd-DSIZE;
 		CRYPTOPP_ASSERT(m_stringStart >= DSIZE);
@@ -371,7 +377,7 @@ unsigned int Deflator::FillWindow(const byte *str, size_t length)
 	CRYPTOPP_ASSERT(maxBlockSize > m_stringStart+m_lookahead);
 	unsigned int accepted = UnsignedMin(maxBlockSize-(m_stringStart+m_lookahead), length);
 	CRYPTOPP_ASSERT(accepted > 0);
-	memcpy(m_byteBuffer + m_stringStart + m_lookahead, str, accepted);
+	std::memcpy(m_byteBuffer + m_stringStart + m_lookahead, str, accepted);
 	m_lookahead += accepted;
 	return accepted;
 }
@@ -407,12 +413,12 @@ unsigned int Deflator::LongestMatch(unsigned int &bestMatch) const
 		{
 			CRYPTOPP_ASSERT(scan[2] == match[2]);
 			unsigned int len = (unsigned int)(
-#if defined(_STDEXT_BEGIN) && !(defined(_MSC_VER) && (_MSC_VER < 1400 || _MSC_VER >= 1600)) && !defined(_STLPORT_VERSION)
+#if defined(_STDEXT_BEGIN) && !(defined(CRYPTOPP_MSC_VERSION) && (CRYPTOPP_MSC_VERSION < 1400 || CRYPTOPP_MSC_VERSION >= 1600)) && !defined(_STLPORT_VERSION)
 				stdext::unchecked_mismatch
 #else
 				std::mismatch
 #endif
-#if _MSC_VER >= 1600
+#if CRYPTOPP_MSC_VERSION >= 1600
 				(stdext::make_unchecked_array_iterator(scan)+3, stdext::make_unchecked_array_iterator(scanEnd), stdext::make_unchecked_array_iterator(match)+3).first - stdext::make_unchecked_array_iterator(scan));
 #else
 				(scan+3, scanEnd, match+3).first - scan);
@@ -683,8 +689,8 @@ void Deflator::EncodeBlock(bool eof, unsigned int blockType)
 			unsigned int hdist = (unsigned int)(FindIfNot(RevIt(distanceCodeLengths.end()), RevIt(distanceCodeLengths.begin()+1), 0).base() - (distanceCodeLengths.begin()+1));
 
 			SecBlockWithHint<unsigned int, 286+30> combinedLengths(hlit+257+hdist+1);
-			memcpy(combinedLengths, literalCodeLengths, (hlit+257)*sizeof(unsigned int));
-			memcpy(combinedLengths+hlit+257, distanceCodeLengths, (hdist+1)*sizeof(unsigned int));
+			std::memcpy(combinedLengths, literalCodeLengths, (hlit+257)*sizeof(unsigned int));
+			std::memcpy(combinedLengths+hlit+257, distanceCodeLengths, (hdist+1)*sizeof(unsigned int));
 
 			FixedSizeSecBlock<unsigned int, 19> codeLengthCodeCounts, codeLengthCodeLengths;
 			std::fill(codeLengthCodeCounts.begin(), codeLengthCodeCounts.end(), 0);

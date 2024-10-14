@@ -10,10 +10,11 @@
  *****************************************************************************/
 
 #include "StdInc.h"
+#include "lua/CLuaFunctionParser.h"
 
 void CLuaPlayerDefs::LoadFunctions()
 {
-    std::map<const char*, lua_CFunction> functions{
+    constexpr static const std::pair<const char*, lua_CFunction> functions[]{
         // Player get funcs
         {"getLocalPlayer", GetLocalPlayer},
         {"getPlayerName", GetPlayerName},
@@ -27,6 +28,8 @@ void CLuaPlayerDefs::LoadFunctions()
         {"isPlayerHudComponentVisible", IsPlayerHudComponentVisible},
         {"getPlayerMoney", GetPlayerMoney},
         {"getPlayerWantedLevel", GetPlayerWantedLevel},
+        {"getPlayerScriptDebugLevel", ArgumentParser<GetPlayerScriptDebugLevel>},
+        {"isPlayerCrosshairVisible", ArgumentParser<IsPlayerCrosshairVisible>},
 
         // Player set funcs
         {"showPlayerHudComponent", ShowPlayerHudComponent},
@@ -47,13 +50,12 @@ void CLuaPlayerDefs::LoadFunctions()
         {"isPlayerMapForced", IsPlayerMapForced},
         {"isPlayerMapVisible", IsPlayerMapVisible},
         {"getPlayerMapBoundingBox", GetPlayerMapBoundingBox},
+        {"getPlayerMapOpacity", ArgumentParser<GetPlayerMapOpacity>},
     };
 
     // Add functions
-    for (const auto& pair : functions)
-    {
-        CLuaCFunctions::AddFunction(pair.first, pair.second);
-    }
+    for (const auto& [name, func] : functions)
+        CLuaCFunctions::AddFunction(name, func);
 }
 
 void CLuaPlayerDefs::AddClass(lua_State* luaVM)
@@ -69,6 +71,7 @@ void CLuaPlayerDefs::AddClass(lua_State* luaVM)
     lua_classfunction(luaVM, "getSerial", "getPlayerSerial");
     lua_classfunction(luaVM, "getWantedLevel", "getPlayerWantedLevel");
     lua_classfunction(luaVM, "getMapBoundingBox", "getPlayerMapBoundingBox");
+    lua_classfunction(luaVM, "getMapOpacity", "getPlayerMapOpacity");
     lua_classfunction(luaVM, "forceMap", "forcePlayerMap");
     lua_classfunction(luaVM, "isMapForced", "isPlayerMapForced");
     lua_classfunction(luaVM, "isMapVisible", "isPlayerMapVisible");
@@ -86,23 +89,18 @@ void CLuaPlayerDefs::AddClass(lua_State* luaVM)
     lua_classfunction(luaVM, "getTeam", "getPlayerTeam");
     lua_classfunction(luaVM, "getNametagText", "getPlayerNametagText");
     lua_classfunction(luaVM, "getNametagColor", "getPlayerNametagColor");
+    lua_classfunction(luaVM, "getScriptDebugLevel", "getPlayerScriptDebugLevel");
 
     lua_classfunction(luaVM, "isNametagShowing", "isPlayerNametagShowing");
+    lua_classfunction(luaVM, "isCrosshairVisible", "isPlayerCrosshairVisible");
 
     lua_classvariable(luaVM, "ping", NULL, "getPlayerPing");
     lua_classvariable(luaVM, "name", NULL, "getPlayerName");
     lua_classvariable(luaVM, "team", NULL, "getPlayerTeam");
+    lua_classvariable(luaVM, "scriptDebugLevel", nullptr, "getPlayerScriptDebugLevel");
     lua_classvariable(luaVM, "nametagText", "setPlayerNametagText", "getPlayerNametagText");
     lua_classvariable(luaVM, "nametagShowing", "setPlayerNametagShowing", "isPlayerNametagShowing");
-
-    // Static class variables or local only variable
-    /*
-    lua_classvariable ( luaVM, "blurLevel", "setPlayerBlurLevel", "getPlayerBlurLevel" );
-    lua_classvariable ( luaVM, "mapForced", NULL, "isPlayerMapForced" );
-    lua_classvariable ( luaVM, "mapVisible", NULL, "isPlayerMapVisible" );
-    lua_classvariable ( luaVM, "money", "setPlayerMoney", "getPlayerMoney" );
-    lua_classvariable ( luaVM, "serial", NULL, "getPlayerSerial" );
-    lua_classvariable ( luaVM, "wantedLevel", NULL, "getPlayerWantedLevel" );*/
+    lua_classvariable(luaVM, "crosshairVisible", nullptr, "isPlayerCrosshairVisible");
 
     lua_registerclass(luaVM, "Player", "Ped");
 }
@@ -315,6 +313,11 @@ int CLuaPlayerDefs::GetPlayerWantedLevel(lua_State* luaVM)
     }
     lua_pushboolean(luaVM, false);
     return 1;
+}
+
+std::uint8_t CLuaPlayerDefs::GetPlayerScriptDebugLevel() noexcept
+{
+    return g_pClientGame->GetPlayerManager()->GetLocalPlayer()->GetPlayerScriptDebugLevel();
 }
 
 int CLuaPlayerDefs::ShowPlayerHudComponent(lua_State* luaVM)
@@ -629,4 +632,15 @@ int CLuaPlayerDefs::GetPlayerMapBoundingBox(lua_State* luaVM)
     // The map is invisible
     lua_pushboolean(luaVM, false);
     return 1;
+}
+
+unsigned char CLuaPlayerDefs::GetPlayerMapOpacity()
+{
+    int iMapOpacity = g_pCore->GetCVars()->GetValue<int>("mapalpha");
+    return static_cast<unsigned char>(Clamp(0, iMapOpacity, 255));
+}
+
+bool CLuaPlayerDefs::IsPlayerCrosshairVisible()
+{
+    return g_pGame->GetHud()->IsCrosshairVisible();
 }

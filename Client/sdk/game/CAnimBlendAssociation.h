@@ -13,12 +13,15 @@
 
 #include <memory>
 
-class CAnimBlendAssociationSAInterface;
-class CAnimBlendStaticAssociationSAInterface;
-class CAnimBlendHierarchySAInterface;
 typedef unsigned long AssocGroupId;
 typedef unsigned long AnimationId;
+
+class CAnimBlendAssociationSAInterface;
 class CAnimBlendHierarchy;
+class CAnimBlendHierarchySAInterface;
+class CAnimBlendStaticAssociationSAInterface;
+enum class eAnimGroup;
+enum class eAnimID;
 struct Rpclump;
 
 class CAnimBlendAssociation
@@ -30,8 +33,8 @@ public:
     virtual CAnimBlendAssociationSAInterface*    InitializeForCustomAnimation(RpClump* pClump, CAnimBlendHierarchySAInterface* pAnimHierarchy) = 0;
     virtual void                                 FreeAnimBlendNodeArray() = 0;
     virtual CAnimBlendAssociationSAInterface*    GetInterface() = 0;
-    virtual AssocGroupId                         GetAnimGroup() = 0;
-    virtual AnimationId                          GetAnimID() = 0;
+    virtual eAnimGroup                           GetAnimGroup() = 0;
+    virtual eAnimID                              GetAnimID() = 0;
     virtual std::unique_ptr<CAnimBlendHierarchy> GetAnimHierarchy() = 0;
 
     virtual float GetBlendAmount() = 0;

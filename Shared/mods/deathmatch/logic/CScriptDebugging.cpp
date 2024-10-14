@@ -10,8 +10,32 @@
  *****************************************************************************/
 
 #include "StdInc.h"
+#include "CScriptDebugging.h"
+
+#ifndef MTA_CLIENT
+    #include "CGame.h"
+    #include "CMainConfig.h"
+    #include "CMapManager.h"
+#endif
 
 #define MAX_STRING_LENGTH 2048
+
+enum DebugScriptLevels : std::uint8_t
+{
+    NONE,
+    ERRORS_ONLY,
+    ERRORS_AND_WARNINGS,
+    ALL,
+};
+
+enum DebugMessageLevels : std::uint8_t
+{
+    MESSAGE_TYPE_DEBUG,
+    MESSAGE_TYPE_ERROR,
+    MESSAGE_TYPE_WARNING,
+    MESSAGE_TYPE_INFO,
+    MESSAGE_TYPE_CUSTOM,
+};
 
 // Handle filename/line number in string
 void CScriptDebugging::LogPCallError(lua_State* luaVM, const SString& strRes, bool bInitialCall)
@@ -44,6 +68,28 @@ void CScriptDebugging::LogPCallError(lua_State* luaVM, const SString& strRes, bo
     }
 }
 
+bool CScriptDebugging::CheckForSufficientDebugLevel(std::uint8_t playerDebugLevel, std::uint8_t messageDebugLevel) const noexcept
+{
+    bool sufficientDebugLevel = false;
+
+    switch (messageDebugLevel)
+    {
+        case MESSAGE_TYPE_ERROR:
+            sufficientDebugLevel = (playerDebugLevel >= ERRORS_ONLY);
+            break;
+        case MESSAGE_TYPE_WARNING:
+            sufficientDebugLevel = (playerDebugLevel >= ERRORS_AND_WARNINGS);
+            break;
+        case MESSAGE_TYPE_INFO:
+        case MESSAGE_TYPE_CUSTOM:
+        case MESSAGE_TYPE_DEBUG:
+            sufficientDebugLevel = (playerDebugLevel == ALL);
+            break;
+    }
+
+    return sufficientDebugLevel;
+}
+
 void CScriptDebugging::LogCustom(lua_State* luaVM, unsigned char ucRed, unsigned char ucGreen, unsigned char ucBlue, const char* szFormat, ...)
 {
     assert(szFormat);
@@ -55,8 +101,7 @@ void CScriptDebugging::LogCustom(lua_State* luaVM, unsigned char ucRed, unsigned
     VSNPRINTF(szBuffer, MAX_STRING_LENGTH, szFormat, marker);
     va_end(marker);
 
-    SLuaDebugInfo luaDebugInfo;
-    LogString("", luaDebugInfo, szBuffer, 0, ucRed, ucGreen, ucBlue);
+    LogString("", GetLuaDebugInfo(luaVM), szBuffer, 4, ucRed, ucGreen, ucBlue);
 }
 
 void CScriptDebugging::LogDebug(lua_State* luaVM, unsigned char ucRed, unsigned char ucGreen, unsigned char ucBlue, const char* szFormat, ...)
@@ -73,19 +118,20 @@ void CScriptDebugging::LogDebug(lua_State* luaVM, unsigned char ucRed, unsigned 
     LogString("", GetLuaDebugInfo(luaVM), szBuffer, 0, ucRed, ucGreen, ucBlue);
 }
 
+void CScriptDebugging::LogInformationV(lua_State* luaVM, const char* format, va_list vlist)
+{
+    assert(format);
+    std::array<char, MAX_STRING_LENGTH> buffer{};
+    VSNPRINTF(buffer.data(), buffer.size(), format, vlist);
+    LogString("INFO: ", GetLuaDebugInfo(luaVM), buffer.data(), 3);
+}
+
 void CScriptDebugging::LogInformation(lua_State* luaVM, const char* szFormat, ...)
 {
-    assert(szFormat);
-
-    // Compose the formatted message
-    char    szBuffer[MAX_STRING_LENGTH];
     va_list marker;
     va_start(marker, szFormat);
-    VSNPRINTF(szBuffer, MAX_STRING_LENGTH, szFormat, marker);
+    LogInformationV(luaVM, szFormat, marker);
     va_end(marker);
-
-    // Log it
-    LogString("INFO: ", GetLuaDebugInfo(luaVM), szBuffer, 3);
 }
 
 void CScriptDebugging::LogWarning(lua_State* luaVM, const char* szFormat, ...)

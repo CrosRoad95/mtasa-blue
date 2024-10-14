@@ -11,6 +11,7 @@
 
 #pragma once
 #include "CLuaDefs.h"
+#include <lua/CLuaMultiReturn.h>
 
 class CLuaVehicleDefs : public CLuaDefs
 {
@@ -44,7 +45,7 @@ public:
     LUA_DECLARE(GetVehicleDoorState);
     LUA_DECLARE(GetVehicleLightState);
     LUA_DECLARE(GetVehiclePanelState);
-    LUA_DECLARE(AreVehicleLightsOn);
+    static bool AreVehicleLightsOn(CClientVehicle* const pVehicle);
     LUA_DECLARE(GetVehicleOverrideLights);
     LUA_DECLARE(GetVehicleTowedByVehicle);
     LUA_DECLARE(GetVehicleTowingVehicle);
@@ -58,16 +59,17 @@ public:
     LUA_DECLARE(GetVehicleNameFromModel);
     LUA_DECLARE(GetVehicleAdjustableProperty);
     LUA_DECLARE(GetHelicopterRotorSpeed);
+    static std::variant<bool, float> GetVehicleRotorSpeed(CClientVehicle* pVehicle);
     LUA_DECLARE(GetVehicleEngineState);
     LUA_DECLARE(IsTrainDerailed);
     LUA_DECLARE(IsTrainDerailable);
     LUA_DECLARE(GetTrainDirection);
     LUA_DECLARE(GetTrainSpeed);
-    LUA_DECLARE(GetTrainTrack);
+    static std::variant<uchar, bool> GetTrainTrack(CClientVehicle* pVehicle);
     LUA_DECLARE(GetTrainPosition);
     LUA_DECLARE(IsTrainChainEngine);
     LUA_DECLARE_OOP(GetVehicleGravity);
-    LUA_DECLARE(IsVehicleBlown);
+    static bool IsVehicleBlown(CClientVehicle* vehicle);
     LUA_DECLARE(GetVehicleHeadLightColor);
     LUA_DECLARE(GetVehicleCurrentGear);
     LUA_DECLARE(GetVehicleHandling);
@@ -81,7 +83,7 @@ public:
     LUA_DECLARE(IsVehicleWindowOpen);
 
     LUA_DECLARE(FixVehicle);
-    LUA_DECLARE(BlowVehicle);
+    static bool BlowVehicle(CClientEntity* entity, std::optional<bool> withExplosion);
     LUA_DECLARE(SetVehicleRotation);
     LUA_DECLARE(SetVehicleTurnVelocity);
     LUA_DECLARE(SetVehicleColor);
@@ -116,11 +118,13 @@ public:
     LUA_DECLARE(SetVehicleFrozen);
     LUA_DECLARE(SetVehicleAdjustableProperty);
     LUA_DECLARE(SetHelicopterRotorSpeed);
+    static bool SetVehicleRotorSpeed(CClientVehicle* pVehicle, float fSpeed);
+    static bool SetVehicleWheelsRotation(CClientVehicle* pVehicle, float fRotation) noexcept;
     LUA_DECLARE(SetTrainDerailed);
     LUA_DECLARE(SetTrainDerailable);
     LUA_DECLARE(SetTrainDirection);
     LUA_DECLARE(SetTrainSpeed);
-    LUA_DECLARE(SetTrainTrack);
+    static bool SetTrainTrack(CClientVehicle* pVehicle, uchar ucTrack);
     LUA_DECLARE(SetTrainPosition);
     LUA_DECLARE(SetVehicleGravity);
     LUA_DECLARE(SetVehicleHeadLightColor);
@@ -140,8 +144,27 @@ public:
     LUA_DECLARE(SetVehicleModelDummyPosition);
     LUA_DECLARE_OOP(GetVehicleModelDummyPosition)
 
+    static std::variant<bool, CLuaMultiReturn<float, float, float>> GetVehicleModelDummyDefaultPosition(unsigned short vehicleModel, eVehicleDummies dummy);
+    static std::variant<bool, CVector>                              OOP_GetVehicleModelDummyDefaultPosition(unsigned short vehicleModel, eVehicleDummies dummy);
+
+    static bool                                                     SetVehicleDummyPosition(CClientVehicle* vehicle, eVehicleDummies dummy, CVector position);
+    static std::variant<bool, CLuaMultiReturn<float, float, float>> GetVehicleDummyPosition(CClientVehicle* vehicle, eVehicleDummies dummy);
+    static std::variant<bool, CVector>                              OOP_GetVehicleDummyPosition(CClientVehicle* vehicle, eVehicleDummies dummy);
+    static bool                                                     ResetVehicleDummyPositions(CClientVehicle* vehicle);
+
+    static std::variant<bool, std::array<std::array<float, 3>, 4>>    GetVehicleEntryPoints(CClientVehicle* vehicle);
+    static std::variant<bool, std::array<CVector, 4>>                 OOP_GetVehicleEntryPoints(CClientVehicle* vehicle);
+
     LUA_DECLARE(SetVehicleModelExhaustFumesPosition);
     LUA_DECLARE_OOP(GetVehicleModelExhaustFumesPosition);
+
+    static bool  SetVehicleVariant(CClientVehicle* pVehicle, std::optional<unsigned char> optVariant1, std::optional<unsigned char> optVariant2);
+    static float GetVehicleWheelScale(CClientVehicle* const pVehicle);
+    static bool  SetVehicleWheelScale(CClientVehicle* const pVehicle, const float fWheelScale);
+    static std::variant<float, std::unordered_map<std::string, float>> GetVehicleModelWheelSize(const unsigned short                             usModel,
+                                                                                                const std::optional<eResizableVehicleWheelGroup> eWheelGroup);
+    static bool SetVehicleModelWheelSize(const unsigned short usModel, const eResizableVehicleWheelGroup eWheelGroup, const float fWheelSize);
+    static int  GetVehicleWheelFrictionState(CClientVehicle* pVehicle, unsigned char wheel);
 
     // Components
     LUA_DECLARE(SetVehicleComponentPosition);
@@ -156,4 +179,6 @@ public:
     LUA_DECLARE(SetVehicleComponentVisible);
     LUA_DECLARE(GetVehicleComponentVisible);
     LUA_DECLARE(GetVehicleComponents);
+
+    static bool SpawnVehicleFlyingComponent(CClientVehicle* const vehicle, std::uint8_t nodeIndex, std::optional<std::uint8_t> componentCollisionType, std::optional<std::uint32_t> removalTime);
 };

@@ -10,13 +10,21 @@
  *****************************************************************************/
 
 #include "StdInc.h"
+#include "CLuaResourceDefs.h"
+#include "lua/CLuaShared.h"
 #include "../utils/CFunctionUseLogger.h"
+#include "CAclRightName.h"
+#include "CStaticFunctionDefinitions.h"
+#include "CScriptArgReader.h"
+#include "CResourceConfigItem.h"
+#include "CDummy.h"
+#include "Utils.h"
 
 extern CNetServer* g_pRealNetServer;
 
 void CLuaResourceDefs::LoadFunctions()
 {
-    std::map<const char*, lua_CFunction> functions{
+    constexpr static const std::pair<const char*, lua_CFunction> functions[]{
         // Create/edit functions
         {"createResource", createResource},
         {"copyResource", copyResource},
@@ -46,14 +54,14 @@ void CLuaResourceDefs::LoadFunctions()
         {"getResourceLoadFailureReason", getResourceLoadFailureReason},
         {"getResourceLastStartTime", getResourceLastStartTime},
         {"getResourceLoadTime", getResourceLoadTime},
-        {"getResourceName", getResourceName},
+        {"getResourceName", ArgumentParserWarn<false, GetResourceName>},
         {"getResourceRootElement", getResourceRootElement},
         {"getResourceDynamicElementRoot", getResourceDynamicElementRoot},
         {"getResourceMapRootElement", getResourceMapRootElement},
         {"getResourceExportedFunctions", getResourceExportedFunctions},
         {"getResourceOrganizationalPath", getResourceOrganizationalPath},
         {"isResourceArchived", isResourceArchived},
-        {"isResourceProtected", isResourceProtected},
+        {"isResourceProtected", ArgumentParser<isResourceProtected>},
 
         // Set stuff
         {"setResourceInfo", setResourceInfo},
@@ -68,10 +76,8 @@ void CLuaResourceDefs::LoadFunctions()
     };
 
     // Add functions
-    for (const auto& pair : functions)
-    {
-        CLuaCFunctions::AddFunction(pair.first, pair.second);
-    }
+    for (const auto& [name, func] : functions)
+        CLuaCFunctions::AddFunction(name, func);
 
     CLuaCFunctions::AddFunction("updateResourceACLRequest", updateResourceACLRequest, true);
 }
@@ -136,8 +142,6 @@ void CLuaResourceDefs::AddClass(lua_State* luaVM)
     lua_classvariable(luaVM, "archived", NULL, "isResourceArchived");
     lua_classvariable(luaVM, "protected", nullptr, "isResourceProtected");
     lua_classvariable(luaVM, "loadFailureReason", NULL, "getResourceLoadFailureReason");
-    // lua_classvariable ( luaVM, "info", "setResourceInfo", "getResourceInfo", CLuaOOPDefs::SetResourceInfo, CLuaOOPDefs::GetResourceInfo ); // .key[value]
-    // lua_classvariable ( luaVM, "defaultSetting", "setResourceDefaultSetting", NULL, CLuaOOPDefs::SetResourceDefaultSetting, NULL ); // .key[value]
 
     lua_registerclass(luaVM, "Resource");
 }
@@ -894,23 +898,17 @@ int CLuaResourceDefs::getResourceLoadTime(lua_State* luaVM)
     return 1;
 }
 
-int CLuaResourceDefs::getResourceName(lua_State* luaVM)
+std::string CLuaResourceDefs::GetResourceName(lua_State* luaVM, std::optional<CResource*> resourceElement)
 {
-    CResource* pResource;
+    if (resourceElement.has_value())
+        return (*resourceElement)->GetName();
 
-    CScriptArgReader argStream(luaVM);
-    argStream.ReadUserData(pResource);
+    CResource* localResource = &lua_getownerresource(luaVM);
 
-    if (!argStream.HasErrors())
-    {
-        lua_pushstring(luaVM, pResource->GetName().c_str());
-        return 1;
-    }
-    else
-        m_pScriptDebugging->LogCustom(luaVM, argStream.GetFullErrorMessage());
+    if (!localResource)
+        throw std::invalid_argument("Couldn't find the resource");
 
-    lua_pushboolean(luaVM, false);
-    return 1;
+    return localResource->GetName();
 }
 
 int CLuaResourceDefs::getResourceRootElement(lua_State* luaVM)
@@ -1174,7 +1172,7 @@ int CLuaResourceDefs::call(lua_State* luaVM)
                     OldResourceRoot.Push(targetLuaVM);
                     lua_setglobal(targetLuaVM, "sourceResourceRoot");
 
-                    return returns.Count();
+                    return static_cast<int>(returns.Count());
                 }
                 else
                 {
@@ -1387,9 +1385,9 @@ int CLuaResourceDefs::Load(lua_State* luaVM)
         {
             CLuaArguments returnValues;
             callbackArguments.Call(pLuaMain, iLuaFunction, &returnValues);
-            if (returnValues.Count())
+            if (returnValues.IsNotEmpty())
             {
-                CLuaArgument* returnedValue = *returnValues.IterBegin();
+                CLuaArgument* returnedValue = *returnValues.begin();
                 int           iType = returnedValue->GetType();
                 if (iType == LUA_TNIL)
                     break;
@@ -1466,17 +1464,7 @@ int CLuaResourceDefs::isResourceArchived(lua_State* luaVM)
     return 1;
 }
 
-int CLuaResourceDefs::isResourceProtected(lua_State* luaVM)
+bool CLuaResourceDefs::isResourceProtected(CResource* const resource)
 {
-    //  bool isResourceProtected ( resource theResource )
-    CResource* pResource;
-
-    CScriptArgReader argStream(luaVM);
-    argStream.ReadUserData(pResource);
-
-    if (argStream.HasErrors())
-        return luaL_error(luaVM, argStream.GetFullErrorMessage());
-
-    lua_pushboolean(luaVM, pResource->IsProtected());
-    return 1;
+    return resource->IsProtected();
 }

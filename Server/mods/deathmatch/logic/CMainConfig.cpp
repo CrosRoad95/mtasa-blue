@@ -10,6 +10,18 @@
  *****************************************************************************/
 
 #include "StdInc.h"
+#include "CMainConfig.h"
+#include "CBandwidthSettings.h"
+#include "CTickRateSettings.h"
+#include "Utils.h"
+#include "ASE.h"
+#include "CGame.h"
+#include "CScriptDebugging.h"
+#include "CResourceManager.h"
+#include "CConsoleCommands.h"
+#include "CHTTPD.h"
+#include "CStaticFunctionDefinitions.h"
+
 #define MTA_SERVER_CONF_TEMPLATE "mtaserver.conf.template"
 
 extern CGame* g_pGame;
@@ -33,10 +45,9 @@ struct
     {26, "data/timecyc.dat"},
 };
 
-CMainConfig::CMainConfig(CConsole* pConsole, CLuaManager* pLuaMain) : CXMLConfig(NULL)
+CMainConfig::CMainConfig(CConsole* pConsole) : CXMLConfig(NULL)
 {
     m_pConsole = pConsole;
-    m_pLuaManager = pLuaMain;
     m_pRootNode = NULL;
     m_pCommandLineParser = NULL;
 
@@ -338,7 +349,7 @@ bool CMainConfig::Load()
 
     // Grab the server fps limit
     int iFPSTemp = 0;
-    iResult = GetInteger(m_pRootNode, "fpslimit", iFPSTemp, 0, 100);
+    iResult = GetInteger(m_pRootNode, "fpslimit", iFPSTemp, 0, std::numeric_limits<short>::max());
     if (iResult == IS_SUCCESS)
     {
         if (iFPSTemp == 0 || iFPSTemp >= 25)
@@ -363,7 +374,7 @@ bool CMainConfig::Load()
     // Grab the Quality for Voice
     iTemp = m_ucVoiceQuality;
     iResult = GetInteger(m_pRootNode, "voice_quality", iTemp, 0, 10);
-    m_ucVoiceQuality = Clamp(0, iTemp, 10);
+    m_ucVoiceQuality = static_cast<unsigned char>(Clamp(0, iTemp, 10));
 
     // Grab the bitrate for Voice [optional]
     iResult = GetInteger(m_pRootNode, "voice_bitrate", iTemp);
@@ -643,7 +654,7 @@ bool CMainConfig::LoadExtended()
 
                 if (IsValidFilePath(strBuffer.c_str()))
                 {
-                    m_pLuaManager->GetLuaModuleManager()->LoadModule(strBuffer.c_str(), strFilename, false);
+                    g_pGame->GetLuaManager()->GetLuaModuleManager()->LoadModule(strBuffer.c_str(), strFilename, false);
                 }
             }
         }
@@ -740,59 +751,74 @@ bool CMainConfig::LoadExtended()
     CLogger::SetMinLogLevel(LOGLEVEL_LOW);
 
     // Register the commands
-    RegisterCommand("start", CConsoleCommands::StartResource, false);
-    RegisterCommand("stop", CConsoleCommands::StopResource, false);
-    RegisterCommand("stopall", CConsoleCommands::StopAllResources, false);
-    RegisterCommand("restart", CConsoleCommands::RestartResource, false);
-    RegisterCommand("refresh", CConsoleCommands::RefreshResources, false);
-    RegisterCommand("refreshall", CConsoleCommands::RefreshAllResources, false);
-    RegisterCommand("list", CConsoleCommands::ListResources, false);
-    RegisterCommand("info", CConsoleCommands::ResourceInfo, false);
-    RegisterCommand("upgrade", CConsoleCommands::UpgradeResources, false);
-    RegisterCommand("check", CConsoleCommands::CheckResources, false);
+    RegisterCommand("start", CConsoleCommands::StartResource, false, "Usage: start <resource-name>\nStart a loaded resource eg: start admin");
+    RegisterCommand("stop", CConsoleCommands::StopResource, false, "Usage: stop <resource-name>\nStop a resource eg: stop admin");
+    RegisterCommand("stopall", CConsoleCommands::StopAllResources, false, "Stop all running resources");
+    RegisterCommand("restart", CConsoleCommands::RestartResource, false, "Usage: restart <resource-name>\nRestarts a running resource eg: restart admin");
+    RegisterCommand("refresh", CConsoleCommands::RefreshResources, false, "Refresh resource list to find new resources");
+    RegisterCommand("refreshall", CConsoleCommands::RefreshAllResources, false, "Refresh resources and restart any changed resources");
+    RegisterCommand("list", CConsoleCommands::ListResources, false, "Shows a list of resources");
+    RegisterCommand("info", CConsoleCommands::ResourceInfo, false, "Usage: info <resource-name>\nGet info for a resource eg: info admin");
+    RegisterCommand("upgrade", CConsoleCommands::UpgradeResources, false,
+                    "Usage: upgrade [ all | <resource-name> ]\nPerform a basic upgrade of all resources.");
+    RegisterCommand("check", CConsoleCommands::CheckResources, false,
+                    "Usage: check [ all | <resource-name> ]\nChecks which files would be changed with upgrade command. Does not modify anything.");
 
-    RegisterCommand("say", CConsoleCommands::Say, false);
-    RegisterCommand("teamsay", CConsoleCommands::TeamSay, false);
-    RegisterCommand("msg", CConsoleCommands::Msg, false);
-    RegisterCommand("me", CConsoleCommands::Me, false);
-    RegisterCommand("nick", CConsoleCommands::Nick, false);
+    RegisterCommand("say", CConsoleCommands::Say, false, "Usage: say <text>\nShow a message to all players on the server eg: say hello");
+    RegisterCommand("teamsay", CConsoleCommands::TeamSay, false, "Usage: teamsay <test>\nSend a message to all players on the same team");
+    RegisterCommand("msg", CConsoleCommands::Msg, false, "Usage: msg <nick> <text>\nSend a message to a player eg: msg playername hello");
+    RegisterCommand("me", CConsoleCommands::Me, false, "Usage: me <text>\nShow a message to all players on the server, with your nick prepended");
+    RegisterCommand("nick", CConsoleCommands::Nick, false, "Usage: nick <old-nick> <new-nick>\nChange your ingame nickname");
 
-    RegisterCommand("login", CConsoleCommands::LogIn, false);
-    RegisterCommand("logout", CConsoleCommands::LogOut, false);
-    RegisterCommand("chgmypass", CConsoleCommands::ChgMyPass, false);
+    RegisterCommand("login", CConsoleCommands::LogIn, false, "Usage: login <accountname> <password>\nLogin to an account eg: login accountname password");
+    RegisterCommand("logout", CConsoleCommands::LogOut, false, "Log out of the current account");
+    RegisterCommand("chgmypass", CConsoleCommands::ChgMyPass, false, "Usage: chgmypass <oldpass> <newpass>\nChange your password eg: chgmypass oldpw newpw");
 
-    RegisterCommand("addaccount", CConsoleCommands::AddAccount, false);
-    RegisterCommand("delaccount", CConsoleCommands::DelAccount, false);
-    RegisterCommand("chgpass", CConsoleCommands::ChgPass, false);
-    RegisterCommand("shutdown", CConsoleCommands::Shutdown, false);
+    RegisterCommand("addaccount", CConsoleCommands::AddAccount, false,
+                    "Usage: addaccount <accountname> <password>\nAdd an account eg: addaccount accountname password");
+    RegisterCommand("delaccount", CConsoleCommands::DelAccount, false, "Usage: delaccount <accountname>\nDelete an account eg: delaccount accountname");
+    RegisterCommand("chgpass", CConsoleCommands::ChgPass, false,
+                    "Usage: chgpass <accountname> <password>\nChange an accounts password eg: chgpass account newpw");
+    RegisterCommand("shutdown", CConsoleCommands::Shutdown, false, "Usage: shutdown <reason>\nShutdown the server eg: shutdown put reason here");
 
-    RegisterCommand("aexec", CConsoleCommands::AExec, false);
+    RegisterCommand("aexec", CConsoleCommands::AExec, false,
+                    "Usage: aexec <nick> <command>\nForce a player to execute a command eg: aexec playername say hello");
 
-    RegisterCommand("whois", CConsoleCommands::WhoIs, false);
+    RegisterCommand("whois", CConsoleCommands::WhoIs, false,
+                    "Usage: whois <nick>\nGet the IP of a player currently connected (use whowas for IP/serial/version)");
 
-    RegisterCommand("debugscript", CConsoleCommands::DebugScript, false);
+    RegisterCommand("debugscript", CConsoleCommands::DebugScript, false,
+                    "Usage: debugscript <0-3>\nRemove (This does not work 'Incorrect client type for this command')");
 
-    RegisterCommand("help", CConsoleCommands::Help, false);
+    RegisterCommand("help", CConsoleCommands::Help, false, "");
 
-    RegisterCommand("loadmodule", CConsoleCommands::LoadModule, false);
-    RegisterCommand("unloadmodule", CConsoleCommands::UnloadModule, false);
-    RegisterCommand("reloadmodule", CConsoleCommands::ReloadModule, false);
+    RegisterCommand("loadmodule", CConsoleCommands::LoadModule, false, "Usage: loadmodule <module-filename>\nLoad a module eg: loadmodule ml_sockets.dll");
+    RegisterCommand("unloadmodule", CConsoleCommands::UnloadModule, false,
+                    "Usage: unloadmodule <module-filename>\nUnload a module eg: unloadmodule ml_sockets.dll");
+    RegisterCommand("reloadmodule", CConsoleCommands::ReloadModule, false,
+                    "Usage: reloadmodule <module-filename>\nReload a module eg: reloadmodule ml_sockets.dll");
 
-    RegisterCommand("ver", CConsoleCommands::Ver, false);
-    RegisterCommand("sver", CConsoleCommands::Ver, false);
-    RegisterCommand("ase", CConsoleCommands::Ase, false);
-    RegisterCommand("openports", CConsoleCommands::OpenPortsTest, false);
+    RegisterCommand("ver", CConsoleCommands::Ver, false, "Get the MTA version");
+    RegisterCommand("sver", CConsoleCommands::Ver, false, "Get the server MTA version");
+    RegisterCommand("ase", CConsoleCommands::Ase, false, "See the amount of master server list queries");
+    RegisterCommand("openports", CConsoleCommands::OpenPortsTest, false, "Test if server ports are open");
 
-    RegisterCommand("debugdb", CConsoleCommands::SetDbLogLevel, false);
+    RegisterCommand("debugdb", CConsoleCommands::SetDbLogLevel, false,
+                    "Usage: debugdb <0-2>\nSet logging level for database functions. [0-Off  1-Errors only  2-All]");
 
-    RegisterCommand("reloadbans", CConsoleCommands::ReloadBans, false);
+    RegisterCommand("reloadbans", CConsoleCommands::ReloadBans, false, "Reloads all the bans from banlist.xml.");
 
-    RegisterCommand("aclrequest", CConsoleCommands::AclRequest, false);
-    RegisterCommand("authserial", CConsoleCommands::AuthorizeSerial, false);
-    RegisterCommand("reloadacl", CConsoleCommands::ReloadAcl, false);
-    RegisterCommand("debugjoinflood", CConsoleCommands::DebugJoinFlood, false);
-    RegisterCommand("debuguptime", CConsoleCommands::DebugUpTime, false);
-    RegisterCommand("sfakelag", CConsoleCommands::FakeLag, false);
+    RegisterCommand("aclrequest", CConsoleCommands::AclRequest, false,
+                    "Usage: aclrequest [ list | allow | deny ] <resource-name> [ <right> | all ]\nManage ACL requests from resources implementing <aclrequest> "
+                    "in their meta.xml");
+    RegisterCommand("authserial", CConsoleCommands::AuthorizeSerial, false,
+                    "Usage: authserial <account-name> [list|removelast|httppass]\nManage serial authentication for an account.");
+    RegisterCommand("reloadacl", CConsoleCommands::ReloadAcl, false, "Perform a simple ACL reload");
+    RegisterCommand("debugjoinflood", CConsoleCommands::DebugJoinFlood, false, "Shows debug information regarding the join flood mitigation feature.");
+    RegisterCommand("debuguptime", CConsoleCommands::DebugUpTime, false, "Shows how many days the server has been up and running.");
+    RegisterCommand("sfakelag", CConsoleCommands::FakeLag, false,
+                    "Usage: sfakelag <packet loss> <extra ping> <ping variance> [<KBPS limit>]\nOnly available if enabled in the mtaserver.conf file.\nAdds "
+                    "artificial packet loss, ping, jitter and bandwidth limits to the server-client connections.");
     return true;
 }
 
@@ -821,12 +847,11 @@ bool CMainConfig::AddMissingSettings()
     if (!g_pGame->IsUsingMtaServerConf())
         return false;
 
-    // Load template
-    const char* szTemplateText =
-        #include MTA_SERVER_CONF_TEMPLATE
-        ;
-    SString strTemplateFilename = PathJoin(g_pServerInterface->GetServerModPath(), "resource-cache", "conf.template");
-    FileSave(strTemplateFilename, szTemplateText);
+    SString strTemplateFilename = PathJoin(g_pServerInterface->GetServerModPath(), "mtaserver.conf.template");
+
+    if (!FileExists(strTemplateFilename))
+        return false;
+
     CXMLFile* pFileTemplate = g_pServerInterface->GetXML()->CreateXML(strTemplateFilename);
     CXMLNode* pRootNodeTemplate = pFileTemplate && pFileTemplate->Parse() ? pFileTemplate->GetRootNode() : nullptr;
     if (!pRootNodeTemplate)
@@ -887,21 +912,23 @@ bool CMainConfig::IsValidPassword(const char* szPassword)
 
 bool CMainConfig::SetPassword(const char* szPassword, bool bSave)
 {
-    if (IsValidPassword(szPassword))
+    if (!IsValidPassword(szPassword))
+        return false;
+
+    m_strPassword = szPassword;
+
+    if (bSave)
     {
-        m_strPassword = szPassword;
-        if (bSave)
-        {
-            SetString(m_pRootNode, "password", szPassword);
-            Save();
-        }
+        SetString(m_pRootNode, "password", szPassword);
+        Save();
     }
+
     return true;
 }
 
 bool CMainConfig::SetFPSLimit(unsigned short usFPS, bool bSave)
 {
-    if (usFPS == 0 || (usFPS >= 25 && usFPS <= 100))
+    if (usFPS == 0 || (usFPS >= 25 && usFPS <= std::numeric_limits<short>::max()))
     {
         m_usFPSLimit = usFPS;
         if (bSave)
@@ -914,10 +941,10 @@ bool CMainConfig::SetFPSLimit(unsigned short usFPS, bool bSave)
     return false;
 }
 
-void CMainConfig::RegisterCommand(const char* szName, FCommandHandler* pFunction, bool bRestricted)
+void CMainConfig::RegisterCommand(const char* szName, FCommandHandler* pFunction, bool bRestricted, const char* szConsoleHelpText)
 {
     // Register the function with the given name and function pointer
-    m_pConsole->AddCommand(pFunction, szName, bRestricted);
+    m_pConsole->AddCommand(pFunction, szName, bRestricted, szConsoleHelpText);
 }
 
 void CMainConfig::SetCommandLineParser(CCommandLineParser* pCommandLineParser)
@@ -1076,7 +1103,7 @@ bool CMainConfig::GetSettingTable(const SString& strName, const char** szAttribN
                 resultLine.PushString(pAttribute->GetValue());
             }
 
-            if (resultLine.Count() != 0)
+            if (resultLine.IsNotEmpty())
             {
                 outTable->PushNumber(uiLuaIndex++);
                 outTable->PushTable(&resultLine);
@@ -1084,7 +1111,7 @@ bool CMainConfig::GetSettingTable(const SString& strName, const char** szAttribN
         }
     } while (pNode);
 
-    return outTable->Count() != 0;
+    return outTable->IsNotEmpty();
 }
 
 //////////////////////////////////////////////////////////////////////
@@ -1412,6 +1439,7 @@ const std::vector<SIntSetting>& CMainConfig::GetIntSettingList()
         {true, true, 50, 1500, 4000, "lightweight_sync_interval", &g_TickRateSettings.iLightSync, &CMainConfig::OnTickRateChange},
         {true, true, 50, 500, 4000, "camera_sync_interval", &g_TickRateSettings.iCamSync, &CMainConfig::OnTickRateChange},
         {true, true, 50, 400, 4000, "ped_sync_interval", &g_TickRateSettings.iPedSync, &CMainConfig::OnTickRateChange},
+        {true, true, 50, 2000, 4000, "ped_far_sync_interval", &g_TickRateSettings.iPedFarSync, NULL},
         {true, true, 50, 400, 4000, "unoccupied_vehicle_sync_interval", &g_TickRateSettings.iUnoccupiedVehicle, &CMainConfig::OnTickRateChange},
         {true, true, 50, 100, 4000, "keysync_mouse_sync_interval", &g_TickRateSettings.iKeySyncRotation, &CMainConfig::OnTickRateChange},
         {true, true, 50, 100, 4000, "keysync_analog_sync_interval", &g_TickRateSettings.iKeySyncAnalogMove, &CMainConfig::OnTickRateChange},
@@ -1427,6 +1455,7 @@ const std::vector<SIntSetting>& CMainConfig::GetIntSettingList()
         {true, true, 10, 50, 1000, "update_cycle_messages_limit", &m_iUpdateCycleMessagesLimit, &CMainConfig::ApplyNetOptions},
         {true, true, 50, 100, 400, "ped_syncer_distance", &g_TickRateSettings.iPedSyncerDistance, &CMainConfig::OnTickRateChange},
         {true, true, 50, 130, 400, "unoccupied_vehicle_syncer_distance", &g_TickRateSettings.iUnoccupiedVehicleSyncerDistance, &CMainConfig::OnTickRateChange},
+        {true, true, 0, 30, 130, "vehicle_contact_sync_radius", &g_TickRateSettings.iVehicleContactSyncRadius, &CMainConfig::OnTickRateChange},
         {false, false, 0, 1, 2, "compact_internal_databases", &m_iCompactInternalDatabases, NULL},
         {true, true, 0, 1, 2, "minclientversion_auto_update", &m_iMinClientVersionAutoUpdate, NULL},
         {true, true, 0, 0, 100, "server_logic_fps_limit", &m_iServerLogicFpsLimit, NULL},
@@ -1434,6 +1463,8 @@ const std::vector<SIntSetting>& CMainConfig::GetIntSettingList()
         {true, true, 0, 1, 1, "filter_duplicate_log_lines", &m_bFilterDuplicateLogLinesEnabled, NULL},
         {false, false, 0, 1, 1, "database_credentials_protection", &m_bDatabaseCredentialsProtectionEnabled, NULL},
         {false, false, 0, 0, 1, "fakelag", &m_bFakeLagCommandEnabled, NULL},
+        {true, true, 50, 1000, 5000, "player_triggered_event_interval", &m_iPlayerTriggeredEventIntervalMs, &CMainConfig::OnPlayerTriggeredEventIntervalChange},
+        {true, true, 1, 100, 1000, "max_player_triggered_events_per_interval", &m_iMaxPlayerTriggeredEventsPerInterval, &CMainConfig::OnPlayerTriggeredEventIntervalChange},
     };
 
     static std::vector<SIntSetting> settingsList;
@@ -1476,4 +1507,15 @@ void CGame::ApplyAseSetting()
         if (!m_pLanBroadcast)
             m_pLanBroadcast = m_pASE->InitLan();
     }
+}
+
+void CMainConfig::OnPlayerTriggeredEventIntervalChange()
+{
+    g_pGame->ApplyPlayerTriggeredEventIntervalChange();
+}
+
+void CGame::ApplyPlayerTriggeredEventIntervalChange()
+{
+    m_iClientTriggeredEventsIntervalMs = m_pMainConfig->GetPlayerTriggeredEventInterval();
+    m_iMaxClientTriggeredEventsPerInterval = m_pMainConfig->GetMaxPlayerTriggeredEventsPerInterval();
 }

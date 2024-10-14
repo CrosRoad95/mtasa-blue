@@ -10,6 +10,7 @@
  *****************************************************************************/
 
 #include "StdInc.h"
+#include <game/CWorld.h>
 
 extern CCoreInterface* g_pCore;
 
@@ -84,9 +85,6 @@ DWORD RETN_CTaskSimpleJetpack_ProcessInputDisabled = 0x67E821;
 DWORD RETN_CTaskSimplePlayerOnFoot_ProcessWeaponFire = 0x685ABF;
 DWORD RETN_CTaskSimplePlayerOnFoot_ProcessWeaponFire_Call = 0x540670;
 
-#define HOOKPOS_CObject_PreRender                   0x59FE69
-DWORD RETURN_CObject_PreRender = 0x59FE6F;
-
 #define HOOKPOS_CWorld_RemoveFallenPeds                     0x565D0D
 DWORD RETURN_CWorld_RemoveFallenPeds_Cont = 0x565D13;
 DWORD RETURN_CWorld_RemoveFallenPeds_Cancel = 0x565E6F;
@@ -113,6 +111,9 @@ DWORD RETURN_CProjectile_FixTearGasCrash_Cont = 0x4C0409;
 #define HOOKPOS_CProjectile_FixExplosionLocation            0x738A77
 DWORD RETURN_CProjectile_FixExplosionLocation = 0x738A86;
 
+#define HOOKPOS_CPed_RemoveWeaponWhenEnteringVehicle 0x5E6370
+DWORD RETURN_CPed_RemoveWeaponWhenEnteringVehicle = 0x5E6379;
+
 void HOOK_CVehicle_ProcessStuff_TestSirenTypeSingle();
 void HOOK_CVehicle_ProcessStuff_PostPushSirenPositionSingle();
 void HOOK_CVehicle_ProcessStuff_TestSirenTypeDual();
@@ -133,13 +134,13 @@ void HOOK_CVehicle_ProcessStuff_StartPointLightCode();
 void HOOK_CTaskSimpleJetpack_ProcessInput();
 void HOOK_CTaskSimplePlayerOnFoot_ProcessWeaponFire();
 void HOOK_CTaskSimpleJetpack_ProcessInputFixFPS2();
-void HOOK_CObject_PreRender();
 void HOOK_CWorld_RemoveFallenPeds();
 void HOOK_CWorld_RemoveFallenCars();
 void HOOK_CVehicleModelInterface_SetClump();
 void HOOK_CBoat_ApplyDamage();
 void HOOK_CProjectile_FixTearGasCrash();
 void HOOK_CProjectile_FixExplosionLocation();
+void HOOK_CPed_RemoveWeaponWhenEnteringVehicle();
 
 void CMultiplayerSA::Init_13()
 {
@@ -183,8 +184,6 @@ void CMultiplayerSA::InitHooks_13()
     HookInstall(HOOKPOS_CTaskSimpleJetpack_ProcessInput, (DWORD)HOOK_CTaskSimpleJetpack_ProcessInput, 5);
     HookInstall(HOOKPOS_CTaskSimplePlayerOnFoot_ProcessWeaponFire, (DWORD)HOOK_CTaskSimplePlayerOnFoot_ProcessWeaponFire, 5);
 
-    HookInstall(HOOKPOS_CObject_PreRender, (DWORD)HOOK_CObject_PreRender, 6);
-
     HookInstall(HOOKPOS_CWorld_RemoveFallenPeds, (DWORD)HOOK_CWorld_RemoveFallenPeds, 6);
 
     HookInstall(HOOKPOS_CWorld_RemoveFallenCars, (DWORD)HOOK_CWorld_RemoveFallenCars, 5);
@@ -197,6 +196,9 @@ void CMultiplayerSA::InitHooks_13()
 
     HookInstall(HOOKPOS_CProjectile_FixExplosionLocation, (DWORD)HOOK_CProjectile_FixExplosionLocation, 12);
 
+    // Fix invisible weapons during jetpack task
+    HookInstall(HOOKPOS_CPed_RemoveWeaponWhenEnteringVehicle, (DWORD)HOOK_CPed_RemoveWeaponWhenEnteringVehicle, 9);
+
     InitHooks_ClothesSpeedUp();
     EnableHooks_ClothesMemFix(true);
     InitHooks_FixBadAnimId();
@@ -206,7 +208,9 @@ void CMultiplayerSA::InitHooks_13()
     InitHooks_Files();
     InitHooks_Weapons();
     InitHooks_Peds();
+    InitHooks_ObjectCollision();
     InitHooks_VehicleCollision();
+    InitHooks_VehicleDummies();
     InitHooks_Vehicles();
     InitHooks_Rendering();
 }
@@ -241,8 +245,6 @@ void CMultiplayerSA::InitMemoryCopies_13()
     // Fixes
     // MemPut < BYTE > ( 0x685AC1, 0xEB );
     // MemPut < BYTE > ( 0x685C2D, 0xEB );
-
-    MemPut<BYTE>(0x0706AB0, 0xC3);            // Skip CRealTimeShadowManager::Update
 }
 
 // Siren Stuff
@@ -341,7 +343,7 @@ void _declspec(naked) HOOK_CVehicle_ProcessStuff_TestSirenTypeSingle()
         // Grab our siren vehicle
         mov pVehicleWithTheSiren, esi
     }
-    // Call our Get siren type function which edits dwSirenType to our desired type
+    //   Call our Get siren type function which edits dwSirenType to our desired type
     GetVehicleSirenType();
     _asm
     {
@@ -636,7 +638,7 @@ void _declspec(naked) HOOK_CVehicle_ProcessStuff_TestSirenTypeDual()
         // Store our post hook default siren type
         mov dwSirenTypePostHook, edi
     }
-    // Do our test and edit dwSirenType2 appropriately
+    //   Do our test and edit dwSirenType2 appropriately
     TestSirenTypeDualDefaultFix();
     _asm
     {
@@ -795,7 +797,7 @@ void _declspec(naked) HOOK_CVehicle_DoesVehicleUseSiren()
         // Grab our vehicle interface
         mov pVehicleWithTheSiren, ecx
     }
-    // Test our vehicle for sirens
+    //   Test our vehicle for sirens
     if (TestVehicleForSiren())
     {
         _asm
@@ -847,7 +849,7 @@ void _declspec(naked) HOOK_CVehicle_ProcessStuff_TestCameraPosition()
         // Grab our vehicle
         mov pVehicleWithTheSiren, esi
     }
-    // Check if we disable or enable the 360 effect
+    //   Check if we disable or enable the 360 effect
     if (SirenCheckCameraPosition())
     {
         _asm
@@ -1323,53 +1325,6 @@ void _declspec(naked) HOOK_CTaskSimplePlayerOnFoot_ProcessWeaponFire()
     }
 }
 
-CVector             vecObjectScale;
-CObjectSAInterface* pCurrentObject;
-bool                CObject_GetScale()
-{
-    SClientEntity<CObjectSA>* pObjectClientEntity = pGameInterface->GetPools()->GetObjectA((DWORD*)pCurrentObject);
-    CObject*                  pObject = pObjectClientEntity ? pObjectClientEntity->pEntity : nullptr;
-    if (pObject)
-    {
-        vecObjectScale = *pObject->GetScale();
-        return true;
-    }
-    return false;
-}
-
-void _declspec(naked) HOOK_CObject_PreRender()
-{
-    _asm
-    {
-        pushad
-        mov pCurrentObject, esi
-    }
-
-    if (CObject_GetScale())
-    {
-        _asm
-        {
-            popad
-
-            push 1
-            lea edx, vecObjectScale
-
-            jmp RETURN_CObject_PreRender
-        }
-    }
-    else
-    {
-        // Do unmodified method if we don't know about this object
-        _asm
-        {
-            popad
-            push 1
-            lea edx, [esp+14h]
-            jmp RETURN_CObject_PreRender
-        }
-    }
-}
-
 CPedSAInterface* pFallingPedInterface;
 bool             CWorld_Remove_FallenPedsCheck()
 {
@@ -1508,7 +1463,7 @@ void _declspec(naked) HOOK_CVehicleModelInterface_SetClump()
         mov pLoadingClump, eax
         mov pLoadingModelInfo, esi
     }
-    // Init our supported upgrades structure for this model info
+    //   Init our supported upgrades structure for this model info
     CVehicleModelInterface_SetClump();
     // Perform overwrite sequence and jump back
     _asm
@@ -1718,5 +1673,44 @@ void _declspec(naked) HOOK_CProjectile_FixExplosionLocation()
 skip:
         lea eax, [esi+4]
         jmp RETURN_CProjectile_FixExplosionLocation
+    }
+}
+
+DWORD CPed_RemoveWeaponWhenEnteringVehicle_CalledFrom = 0;
+void _declspec(naked) HOOK_CPed_RemoveWeaponWhenEnteringVehicle()
+{
+    _asm
+    {
+        push eax
+        mov eax, [esp+4]
+        mov CPed_RemoveWeaponWhenEnteringVehicle_CalledFrom, eax
+        pop eax
+
+        push esi
+        mov esi, ecx
+        mov eax, [esi+480h]
+    }
+
+    // Called from CTaskSimpleJetPack::ProcessPed
+    if (CPed_RemoveWeaponWhenEnteringVehicle_CalledFrom == 0x68025F)
+    {
+        _asm
+        {
+            mov pPedUsingJetpack, esi
+        }
+
+        if (AllowJetPack())
+        {
+            _asm
+            {
+                pop esi
+                retn 4
+            }
+        }
+    }
+
+    _asm
+    {
+        jmp RETURN_CPed_RemoveWeaponWhenEnteringVehicle
     }
 }

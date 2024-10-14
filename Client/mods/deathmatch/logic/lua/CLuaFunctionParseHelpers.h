@@ -1,10 +1,8 @@
 /*****************************************************************************
  *
- *  PROJECT:     Multi Theft Auto v1.0
- *               (Shared logic for modifications)
+ *  PROJECT:     Multi Theft Auto
  *  LICENSE:     See LICENSE in the top level directory
- *  FILE:        MTA10/mods/shared_logic/lua/CLuaFunctionParseHelpers.h
- *  PURPOSE:
+ *  FILE:        Client/mods/deathmatch/logic/lua/CLuaFunctionParseHelpers.h
  *
  *****************************************************************************/
 
@@ -12,10 +10,16 @@
 
 // Forward declare enum reflection stuff
 #include <gui/CGUIEnumDefs.h>
+#include <game/CAudioEngine.h>
+#include <game/CRenderWare.h>
+#include <game/CHud.h>
+#include <game/CStreaming.h>
+#include <type_traits>
 
 enum eLuaType
 {
 };
+
 DECLARE_ENUM(eLuaType);
 DECLARE_ENUM(CGUIVerticalAlign);
 DECLARE_ENUM(CGUIHorizontalAlign);
@@ -57,12 +61,33 @@ DECLARE_ENUM(eCursorType)
 DECLARE_ENUM(eWheelPosition)
 DECLARE_ENUM(D3DPRIMITIVETYPE);
 DECLARE_ENUM(eVehicleDummies);
+DECLARE_ENUM_CLASS(eGrainMultiplierType);
+DECLARE_ENUM_CLASS(eResizableVehicleWheelGroup);
 DECLARE_ENUM(eSurfaceProperties);
 DECLARE_ENUM(eSurfaceAudio);
 DECLARE_ENUM(eSurfaceBulletEffect);
 DECLARE_ENUM(eSurfaceWheelEffect);
 DECLARE_ENUM(eSurfaceSkidMarkType);
 DECLARE_ENUM(eSurfaceAdhesionGroup);
+DECLARE_ENUM_CLASS(eClientModelType);
+DECLARE_ENUM(eSoundEffectType);
+DECLARE_ENUM_CLASS(eSoundEffectParams::Chorus);
+DECLARE_ENUM_CLASS(eSoundEffectParams::Compressor);
+DECLARE_ENUM_CLASS(eSoundEffectParams::Distortion);
+DECLARE_ENUM_CLASS(eSoundEffectParams::Echo);
+DECLARE_ENUM_CLASS(eSoundEffectParams::Flanger);
+DECLARE_ENUM_CLASS(eSoundEffectParams::Gargle);
+DECLARE_ENUM_CLASS(eSoundEffectParams::I3DL2Reverb);
+DECLARE_ENUM_CLASS(eSoundEffectParams::ParamEq);
+DECLARE_ENUM_CLASS(eSoundEffectParams::Reverb);
+DECLARE_ENUM_CLASS(eModelIdeFlag);
+DECLARE_ENUM_CLASS(_D3DFORMAT);
+DECLARE_ENUM_CLASS(eRenderStage);
+DECLARE_ENUM_CLASS(eFxParticleSystems);
+DECLARE_ENUM(ePools);
+DECLARE_ENUM(eWorldProperty);
+DECLARE_ENUM_CLASS(eModelLoadState);
+DECLARE_ENUM_CLASS(PreloadAreaOption);
 
 class CRemoteCall;
 
@@ -194,10 +219,6 @@ inline SString GetClassTypeName(CClientObject*)
 {
     return "object";
 }
-inline SString GetClassTypeName(CClientCivilian*)
-{
-    return "civilian";
-}
 inline SString GetClassTypeName(CClientPickup*)
 {
     return "pickup";
@@ -220,7 +241,7 @@ inline SString GetClassTypeName(CClientPed*)
 }
 inline SString GetClassTypeName(CRemoteCall*)
 {
-    return "remotecall";
+    return "request";
 }
 inline SString GetClassTypeName(CClientProjectile*)
 {
@@ -253,6 +274,14 @@ inline SString GetClassTypeName(CClientColModel*)
 inline SString GetClassTypeName(CClientTXD*)
 {
     return "txd";
+}
+inline SString GetClassTypeName(CClientIMG*)
+{
+    return "img";
+}
+inline SString GetClassTypeName(CClientBuilding*)
+{
+    return "building";
 }
 inline SString GetClassTypeName(CClientSound*)
 {
@@ -432,121 +461,106 @@ inline SString GetClassTypeName(eSurfaceAdhesionGroup*)
 {
     return "surface-adhesion-group";
 }
-inline SString GetClassByTypeName(eObjectGroup::Modifiable*)
+inline SString GetClassTypeName(eSoundEffectType*)
 {
-    return "objectgroup-modifiable";
+    return "soundeffect-type";
 }
-inline SString GetClassByTypeName(eObjectGroup::DamageEffect*)
+inline SString GetClassTypeName(eSoundEffectParams::Chorus*)
 {
-    return "objectgroup-damageeffect";
+    return "soundeffect-params-chorus";
 }
-inline SString GetClassByTypeName(eObjectGroup::CollisionResponse*)
+inline SString GetClassTypeName(eSoundEffectParams::Compressor*)
 {
-    return "objectgroup-collisionresponse";
+    return "soundeffect-params-compressor";
 }
-inline SString GetClassByTypeName(eObjectGroup::FxType*)
+inline SString GetClassTypeName(eSoundEffectParams::Distortion*)
 {
-    return "objectgroup-fxtype";
+    return "soundeffect-params-distortion";
 }
-inline SString GetClassByTypeName(eObjectGroup::BreakMode*)
+inline SString GetClassTypeName(eSoundEffectParams::Echo*)
 {
-    return "objectgroup-breakmode";
+    return "soundeffect-params-echo";
+}
+inline SString GetClassTypeName(eSoundEffectParams::Flanger*)
+{
+    return "soundeffect-params-flanger";
+}
+inline SString GetClassTypeName(eSoundEffectParams::Gargle*)
+{
+    return "soundeffect-params-gargle";
+}
+inline SString GetClassTypeName(eSoundEffectParams::I3DL2Reverb*)
+{
+    return "soundeffect-params-i3dl2reverb";
+}
+inline SString GetClassTypeName(eSoundEffectParams::ParamEq*)
+{
+    return "soundeffect-params-parameq";
+}
+inline SString GetClassTypeName(eSoundEffectParams::Reverb*)
+{
+    return "soundeffect-params-reverb";
+}
+inline SString GetClassTypeName(eWorldProperty*)
+{
+    return "world-property";
+}
+
+inline SString GetClassTypeName(CClientVectorGraphic*)
+{
+    return "svg";
 }
 
 //
 // CResource from userdata
 //
-template <class T>
-CResource* UserDataCast(CResource*, void* ptr, lua_State*)
-{
-    return g_pClientGame->GetResourceManager()->GetResourceFromScriptID(reinterpret_cast<unsigned long>(ptr));
-}
+CResource* UserDataCast(CResource* ptr, lua_State* luaState);
 
 //
 // CXMLNode from userdata
 //
-template <class T>
-CXMLNode* UserDataCast(CXMLNode*, void* ptr, lua_State*)
-{
-    return g_pCore->GetXML()->GetNodeFromID(reinterpret_cast<unsigned long>(ptr));
-}
+CXMLNode* UserDataCast(CXMLNode* ptr, lua_State* luaState);
 
 //
 // CLuaTimer from userdata
 //
-template <class T>
-CLuaTimer* UserDataCast(CLuaTimer*, void* ptr, lua_State* luaVM)
-{
-    CLuaMain* pLuaMain = CLuaDefs::m_pLuaManager->GetVirtualMachine(luaVM);
-    if (pLuaMain)
-    {
-        return pLuaMain->GetTimerManager()->GetTimerFromScriptID(reinterpret_cast<unsigned long>(ptr));
-    }
-    return NULL;
-}
+CLuaTimer* UserDataCast(CLuaTimer* ptr, lua_State* luaState);
 
 //
 // CLuaVector2D from userdata
 //
-template <class T>
-CLuaVector2D* UserDataCast(CLuaVector2D*, void* ptr, lua_State* luaVM)
-{
-    return CLuaVector2D::GetFromScriptID(reinterpret_cast<unsigned int>(ptr));
-}
+CLuaVector2D* UserDataCast(CLuaVector2D* ptr, lua_State* luaState);
 
 //
 // CLuaVector3D from userdata
 //
-template <class T>
-CLuaVector3D* UserDataCast(CLuaVector3D*, void* ptr, lua_State* luaVM)
-{
-    return CLuaVector3D::GetFromScriptID(reinterpret_cast<unsigned int>(ptr));
-}
+CLuaVector3D* UserDataCast(CLuaVector3D* ptr, lua_State* luaState);
 
 //
 // CLuaVector4D from userdata
 //
-template <class T>
-CLuaVector4D* UserDataCast(CLuaVector4D*, void* ptr, lua_State* luaVM)
-{
-    return CLuaVector4D::GetFromScriptID(reinterpret_cast<unsigned int>(ptr));
-}
+CLuaVector4D* UserDataCast(CLuaVector4D* ptr, lua_State* luaState);
 
 //
 // CLuaMatrix from userdata
 //
-template <class T>
-CLuaMatrix* UserDataCast(CLuaMatrix*, void* ptr, lua_State* luaVM)
-{
-    return CLuaMatrix::GetFromScriptID(reinterpret_cast<unsigned int>(ptr));
-}
+CLuaMatrix* UserDataCast(CLuaMatrix* ptr, lua_State* luaState);
 
 //
 // CClientEntity from userdata
 //
-template <class T>
-CClientEntity* UserDataCast(CClientEntity*, void* ptr, lua_State*)
+CClientEntity* UserDataToElementCast(CClientEntity* ptr, SharedUtil::ClassId classId, lua_State* luaState);
+
+template <typename T, typename = std::enable_if_t<std::is_base_of_v<CClientEntity, T>>>
+T* UserDataCast(T* ptr, lua_State* luaState)
 {
-    ElementID      ID = TO_ELEMENTID(ptr);
-    CClientEntity* pEntity = CElementIDs::GetElement(ID);
-    if (!pEntity || pEntity->IsBeingDeleted() || !pEntity->IsA(T::GetClassId()))
-        return NULL;
-    return pEntity;
+    return reinterpret_cast<T*>(UserDataToElementCast(ptr, T::GetClassId(), luaState));
 }
 
 //
 // CRemoteCall from userdata
 //
-template <class T>
-CRemoteCall* UserDataCast(CRemoteCall*, void* ptr, lua_State*)
-{
-    CRemoteCall* pRemoteCall = (CRemoteCall*)ptr;
-    
-    if (pRemoteCall && g_pClientGame->GetRemoteCalls()->CallExists(pRemoteCall))
-        return pRemoteCall;
-
-    return nullptr;
-}
+CRemoteCall* UserDataCast(CRemoteCall* ptr, lua_State* luaState);
 
 //
 // CClientGUIElement ( CGUIElement )
@@ -571,6 +585,7 @@ void MixedReadDxFontString(CScriptArgReader& argStream, eFontType& outFontType, 
 void MixedReadGuiFontString(CScriptArgReader& argStream, SString& strFontName, const char* szDefaultFontName, CClientGuiFont*& poutGuiFontElement);
 void MixedReadMaterialString(CScriptArgReader& argStream, CClientMaterial*& pMaterialElement);
 bool ReadMatrix(lua_State* luaVM, uint uiArgIndex, CMatrix& outMatrix);
+void MinClientReqCheck(lua_State* luaVM, const char* szVersionReq, const char* szReason);
 bool MinClientReqCheck(CScriptArgReader& argStream, const char* szVersionReq, const char* szReason = nullptr);
 void ReadPregFlags(CScriptArgReader& argStream, pcrecpp::RE_Options& pOptions);
 

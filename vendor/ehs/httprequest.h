@@ -8,6 +8,7 @@
 #endif
 
 #include <map>
+#include <string_view>
 
 #include <pme.h>
 
@@ -25,6 +26,7 @@ enum RequestMethod { REQUESTMETHOD_OPTIONS, /* not implemented */
 					 REQUESTMETHOD_DELETE, ///< not implemented
 					 REQUESTMETHOD_TRACE, ///< not implemented
 					 REQUESTMETHOD_CONNECT, ///< not implemented
+					 REQUESTMETHOD_PATCH, ///< not implemented
 					 REQUESTMETHOD_LAST, ///< must be the last valid entry
 					 REQUESTMETHOD_UNKNOWN, ///< used until we find the method
 					 REQUESTMETHOD_INVALID ///< must be the last entry
@@ -87,8 +89,11 @@ class HttpRequest {
 	/// takes the cookie header and breaks it down into usable chunks -- returns number of name/value pairs found
 	int ParseCookieData ( std::string & irsData );
 
-	/// interprets the given string as if it's name=value pairs and puts them into oFormElements
-	void GetFormDataFromString ( const std::string & irsString );
+	/// parses the request uri, extracts the query segment and puts its key=value pairs into oFormElements
+	void ParseRequestURI(std::string_view uri);
+
+	/// parses the form data as if it's key=value pairs and puts them into oFormElements
+	void ParseFormData(std::string_view formData, bool isQueryData);
 
 	/// the current parse state -- where we are in looking at the data from the client
 	HttpParseStates nCurrentHttpParseState;
@@ -117,6 +122,9 @@ class HttpRequest {
 
 	/// Data specified by the client.  The 'name' field is mapped to a FormValue object which has the value and any metadata
 	FormValueMap oFormValueMap;
+
+	/// Data specified by the client in the query string.
+	FormValueMap oQueryValueMap;
 
 	/// cookies that come in from the client
 	CookieMap oCookieMap;

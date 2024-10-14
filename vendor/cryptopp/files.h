@@ -46,7 +46,7 @@ public:
 	FileStore(const char *filename) : m_stream(NULLPTR), m_space(NULLPTR), m_len(0), m_waiting(0)
 		{StoreInitialize(MakeParameters(Name::InputFileName(), filename ? filename : ""));}
 
-#if defined(CRYPTOPP_UNIX_AVAILABLE) || defined(CRYPTOPP_DOXYGEN_PROCESSING) || _MSC_VER >= 1400
+#if defined(CRYPTOPP_UNIX_AVAILABLE) || defined(CRYPTOPP_DOXYGEN_PROCESSING) || (CRYPTOPP_MSC_VERSION >= 1400)
 	/// \brief Construct a FileStore
 	/// \param filename the Unicode name of the file to open
 	/// \details On non-Windows OS, this function assumes that setlocale() has been called.
@@ -55,13 +55,17 @@ public:
 #endif
 
 	/// \brief Retrieves the internal stream
-	/// \returns the internal stream pointer
+	/// \return the internal stream pointer
 	std::istream* GetStream() {return m_stream;}
 
 	/// \brief Retrieves the internal stream
-	/// \returns the internal stream pointer
+	/// \return the internal stream pointer
 	const std::istream* GetStream() const {return m_stream;}
 
+	/// \brief Provides the number of bytes ready for retrieval
+	/// \return the number of bytes ready for retrieval
+	/// \details All retrieval functions return the actual number of bytes retrieved, which is
+	///  the lesser of the request number and  MaxRetrievable()
 	lword MaxRetrievable() const;
 	size_t TransferTo2(BufferedTransformation &target, lword &transferBytes, const std::string &channel=DEFAULT_CHANNEL, bool blocking=true);
 	size_t CopyRangeTo2(BufferedTransformation &target, lword &begin, lword end=LWORD_MAX, const std::string &channel=DEFAULT_CHANNEL, bool blocking=true) const;
@@ -105,7 +109,7 @@ public:
 	FileSource(const char *filename, bool pumpAll, BufferedTransformation *attachment = NULLPTR, bool binary=true)
 		: SourceTemplate<FileStore>(attachment) {SourceInitialize(pumpAll, MakeParameters(Name::InputFileName(), filename)(Name::InputBinaryMode(), binary));}
 
-#if defined(CRYPTOPP_UNIX_AVAILABLE) || defined(CRYPTOPP_DOXYGEN_PROCESSING) || _MSC_VER >= 1400
+#if defined(CRYPTOPP_UNIX_AVAILABLE) || defined(CRYPTOPP_DOXYGEN_PROCESSING) || (CRYPTOPP_MSC_VERSION >= 1400)
 	/// \brief Construct a FileSource
 	/// \param filename the Unicode name of the file to open
 	/// \param pumpAll flag indicating if source data should be pumped to its attached transformation
@@ -117,7 +121,7 @@ public:
 #endif
 
 	/// \brief Retrieves the internal stream
-	/// \returns the internal stream pointer
+	/// \return the internal stream pointer
 	std::istream* GetStream() {return m_store.GetStream();}
 };
 
@@ -151,7 +155,7 @@ public:
 	FileSink(const char *filename, bool binary=true)
 		{IsolatedInitialize(MakeParameters(Name::OutputFileName(), filename)(Name::OutputBinaryMode(), binary));}
 
-#if defined(CRYPTOPP_UNIX_AVAILABLE) || _MSC_VER >= 1400
+#if defined(CRYPTOPP_UNIX_AVAILABLE) || (CRYPTOPP_MSC_VERSION >= 1400)
 	/// \brief Construct a FileSink
 	/// \param filename the Unicode name of the file to open
 	/// \details On non-Windows OS, this function assumes that setlocale() has been called.
@@ -160,7 +164,7 @@ public:
 #endif
 
 	/// \brief Retrieves the internal stream
-	/// \returns the internal stream pointer
+	/// \return the internal stream pointer
 	std::ostream* GetStream() {return m_stream;}
 
 	void IsolatedInitialize(const NameValuePairs &parameters);

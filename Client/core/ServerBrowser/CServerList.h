@@ -139,8 +139,11 @@ public:
         bScanned = false;
         bSkipped = false;
         bSerials = false;
+        isStatusVerified = true;
         bPassworded = false;
         bKeepFlag = false;
+        iRowIndex = -1;
+
         nPlayers = 0;
         nMaxPlayers = 0;
         nPing = 9999;
@@ -180,6 +183,7 @@ public:
     unsigned short nPlayers;               // Current players
     unsigned short nMaxPlayers;            // Maximum players
     unsigned short nPing;                  // Ping time
+    bool           isStatusVerified;       // Ping status verified
     bool           bPassworded;            // Password protected
     bool           bSerials;               // Serial verification on
     bool           bScanned;
@@ -192,6 +196,7 @@ public:
     uint           uiQueryRetryCount;
     uint           uiRevision;
     bool           bKeepFlag;
+    int            iRowIndex;
 
     SString strGameName;                  // Game name. Always 'mta'
     SString strVersion;                   // Game version
@@ -298,7 +303,7 @@ public:
     CServerListItemList* m_pItemList;
 
 protected:
-    int          m_iDataQuality;
+    int m_iDataQuality;
 
     static std::set<CServerListItem*> ms_ValidServerListItemMap;
 };

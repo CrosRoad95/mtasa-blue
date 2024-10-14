@@ -10,23 +10,20 @@
  *****************************************************************************/
 
 #include "StdInc.h"
+#include "CLuaTimerDefs.h"
+#include "CScriptArgReader.h"
 
 void CLuaTimerDefs::LoadFunctions()
 {
-    std::map<const char*, lua_CFunction> functions{
-        {"setTimer", SetTimer},
-        {"killTimer", KillTimer},
-        {"resetTimer", ResetTimer},
-        {"getTimers", GetTimers},
-        {"isTimer", IsTimer},
-        {"getTimerDetails", GetTimerDetails},
+    constexpr static const std::pair<const char*, lua_CFunction> functions[]{
+        {"setTimer", SetTimer}, {"killTimer", KillTimer}, {"resetTimer", ResetTimer},
+        {"setTimerPaused", ArgumentParser<SetTimerPaused>},{"isTimerPaused", ArgumentParser<IsTimerPaused>},
+        {"getTimers", GetTimers}, {"isTimer", IsTimer},{"getTimerDetails", GetTimerDetails},
     };
 
     // Add functions
-    for (const auto& pair : functions)
-    {
-        CLuaCFunctions::AddFunction(pair.first, pair.second);
-    }
+    for (const auto& [name, func] : functions)
+        CLuaCFunctions::AddFunction(name, func);
 }
 
 void CLuaTimerDefs::AddClass(lua_State* luaVM)
@@ -37,10 +34,10 @@ void CLuaTimerDefs::AddClass(lua_State* luaVM)
     lua_classfunction(luaVM, "destroy", "killTimer");
     lua_classfunction(luaVM, "reset", "resetTimer");
     lua_classfunction(luaVM, "isValid", "isTimer");
-
     lua_classfunction(luaVM, "getDetails", "getTimerDetails");
 
     lua_classvariable(luaVM, "valid", NULL, "isTimer");
+    lua_classvariable(luaVM, "paused", "setTimerPaused", "isTimerPaused");
 
     lua_registerclass(luaVM, "Timer");
 }
@@ -116,6 +113,22 @@ int CLuaTimerDefs::KillTimer(lua_State* luaVM)
 
     lua_pushboolean(luaVM, false);
     return 1;
+}
+
+bool CLuaTimerDefs::IsTimerPaused(CLuaTimer* timer) noexcept
+{
+    return timer->IsPaused();
+}
+
+bool CLuaTimerDefs::SetTimerPaused(lua_State* luaVM, CLuaTimer* timer, bool paused)
+{
+    //  bool setTimerPaused ( timer theTimer, bool paused )
+    CLuaMain* luaMain = m_pLuaManager->GetVirtualMachine(luaVM);
+    if (!luaMain)
+        return false;
+
+    luaMain->GetTimerManager()->SetTimerPaused(timer, paused);
+    return true;
 }
 
 int CLuaTimerDefs::ResetTimer(lua_State* luaVM)

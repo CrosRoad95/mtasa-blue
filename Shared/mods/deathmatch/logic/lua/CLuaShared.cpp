@@ -7,6 +7,11 @@
  *****************************************************************************/
 
 #include "StdInc.h"
+#include "CLuaShared.h"
+
+#ifndef MTA_CLIENT
+    #include "CGame.h"
+#endif
 
 // If compiled script, make sure correct chunkname is embedded
 void CLuaShared::EmbedChunkName(SString strChunkName, const char** pcpOutBuffer, uint* puiOutSize)
@@ -72,6 +77,8 @@ void CLuaShared::LoadFunctions()
     CLuaCryptDefs::LoadFunctions();
     CLuaFileDefs::LoadFunctions();
     CLuaXMLDefs::LoadFunctions();
+    CLuaPathDefs::LoadFunctions();
+    CLuaTrainTrackDefs::LoadFunctions();
     CLuaUTFDefs::LoadFunctions();
     CLuaUtilDefs::LoadFunctions();
 }
@@ -79,6 +86,7 @@ void CLuaShared::LoadFunctions()
 void CLuaShared::AddClasses(lua_State* luaVM)
 {
     CLuaFileDefs::AddClass(luaVM);
+    CLuaPathDefs::AddClass(luaVM);
     CLuaXMLDefs::AddClass(luaVM);
 }
 

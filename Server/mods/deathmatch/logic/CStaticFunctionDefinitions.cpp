@@ -1,17 +1,83 @@
 /*****************************************************************************
  *
- *  PROJECT:     Multi Theft Auto v1.0
+ *  PROJECT:     Multi Theft Auto
  *  LICENSE:     See LICENSE in the top level directory
- *  FILE:        mods/deathmatch/logic/CStaticFunctionDefinitions.cpp
+ *  FILE:        Server/mods/deathmatch/logic/CStaticFunctionDefinitions.cpp
  *  PURPOSE:     Lua static function definitions class
  *
- *  Multi Theft Auto is available from http://www.multitheftauto.com/
+ *  Multi Theft Auto is available from https://multitheftauto.com/
  *
  *****************************************************************************/
 
 #include "StdInc.h"
+#include "CStaticFunctionDefinitions.h"
+#include "lua/CLuaMain.h"
+#include "CGame.h"
+#include "ASE.h"
+#include "CBan.h"
+#include "CColManager.h"
+#include "CPickupManager.h"
+#include "CMarkerManager.h"
+#include "CClock.h"
+#include "CBlip.h"
+#include "CWater.h"
+#include "CPlayerCamera.h"
+#include "CElementDeleter.h"
+#include "CMainConfig.h"
+#include "CRegistry.h"
+#include "CColRectangle.h"
+#include "CColCircle.h"
+#include "CColTube.h"
+#include "CColCuboid.h"
+#include "CColPolygon.h"
+#include "CColSphere.h"
+#include "CPedSync.h"
+#include "CZoneNames.h"
+#include "CKeyBinds.h"
+#include "CAccountManager.h"
+#include "CMapManager.h"
+#include "CBanManager.h"
+#include "CPedManager.h"
+#include "CWaterManager.h"
+#include "CResourceManager.h"
+#include "CWeaponStatManager.h"
+#include "CHandlingManager.h"
+#include "CCustomWeaponManager.h"
+#include "CBuildingRemovalManager.h"
+#include "CTickRateSettings.h"
+#include "CWeaponNames.h"
+#include "CAccessControlListManager.h"
+#include "CPerfStatManager.h"
+#include "CVehicleNames.h"
+#include "CUnoccupiedVehicleSync.h"
+#include "Utils.h"
+#include "lua/CLuaFunctionParseHelpers.h"
+#include "packets/CLuaPacket.h"
+#include "packets/CElementRPCPacket.h"
+#include "packets/CVehicleSpawnPacket.h"
+#include "packets/CEntityAddPacket.h"
+#include "packets/CPlayerChangeNickPacket.h"
+#include "packets/CPlayerWastedPacket.h"
+#include "packets/CPlayerClothesPacket.h"
+#include "packets/CFireSyncPacket.h"
+#include "packets/CServerInfoSyncPacket.h"
+#include "packets/CChatEchoPacket.h"
+#include "packets/CConsoleEchoPacket.h"
+#include "packets/CChatClearPacket.h"
+#include "packets/CElementRPCPacket.h"
+#include "version.h"
+#include <net/rpc_enums.h>
 
-extern CGame* g_pGame;
+#ifndef WIN32
+    #include <limits.h>
+
+    #ifndef MAX_PATH
+        #define MAX_PATH PATH_MAX
+    #endif
+#endif
+
+extern CGame*            g_pGame;
+extern CTimeUsMarker<20> markerLatentEvent;
 
 static CLuaManager*          m_pLuaManager;
 static CColManager*          m_pColManager;
@@ -39,12 +105,10 @@ static CCustomWeaponManager* m_pCustomWeaponManager;
 #define RUN_CHILDREN(func) \
     if (pElement->CountChildren() && pElement->IsCallPropagationEnabled()) \
     { \
-        CElementListSnapshot* pList = pElement->GetChildrenListSnapshot(); \
-        pList->AddRef(); /* Keep list alive during use */ \
+        CElementListSnapshotRef pList = pElement->GetChildrenListSnapshot(); \
         for (CElementListSnapshot::const_iterator iter = pList->begin(); iter != pList->end(); iter++) \
             if (!(*iter)->IsBeingDeleted()) \
                 func; \
-        pList->Release(); \
     }
 
 CStaticFunctionDefinitions::CStaticFunctionDefinitions(CGame* pGame)
@@ -246,6 +310,9 @@ CDummy* CStaticFunctionDefinitions::CreateElement(CResource* pResource, const ch
 
 bool CStaticFunctionDefinitions::DestroyElement(CElement* pElement)
 {
+    if (!pElement->CanBeDestroyedByScript())
+        return false;
+
     // Run us on all its children
     CChildListType ::const_iterator iter = pElement->IterBegin();
     while (iter != pElement->IterEnd())
@@ -261,10 +328,27 @@ bool CStaticFunctionDefinitions::DestroyElement(CElement* pElement)
 
     // We can't destroy the root or a player/remote client/console
     int iType = pElement->GetType();
-    if (pElement == m_pMapManager->GetRootElement() || iType == CElement::PLAYER || iType == CElement::CONSOLE ||
+    if (pElement == m_pMapManager->GetRootElement() || iType == CElement::PLAYER || iType == CElement::CONSOLE || 
         g_pGame->GetResourceManager()->IsAResourceElement(pElement))
     {
         return false;
+    }
+
+    if (iType == CElement::TEAM) { // Its team trigger onPlayerTeamChange for each player in the team
+        CTeam* pTeam = static_cast<CTeam*>(pElement);
+
+        auto iterBegin = pTeam->PlayersBegin();
+        auto iterEnd = pTeam->PlayersEnd();
+        CLuaArguments arguments;
+
+        for (auto iter = iterBegin; iter != iterEnd; ++iter)
+        {
+            CPlayer* player = *iter;
+            arguments.PushElement(pTeam); // Return team element as oldteam
+            arguments.PushNil(); // No new team return nil
+            player->CallEvent("onPlayerTeamChange", arguments);
+            arguments.DeleteArguments();
+        }
     }
 
     // Tell everyone to destroy it if this is not a per-player entity
@@ -273,7 +357,7 @@ bool CStaticFunctionDefinitions::DestroyElement(CElement* pElement)
         // Unsync it (will destroy it for those that know about it)
         CPerPlayerEntity* pEntity = static_cast<CPerPlayerEntity*>(pElement);
         pEntity->Sync(false);
-    }
+    }  
 
     // Tell everyone to destroy it
     CEntityRemovePacket Packet;
@@ -330,7 +414,7 @@ CElement* CStaticFunctionDefinitions::CloneElement(CResource* pResource, CElemen
             vecNewPosition += pElement->GetPosition();
 
         pNewElement->SetPosition(vecNewPosition);
-        pNewElement->GetCustomDataPointer()->Copy(pElement->GetCustomDataPointer());
+        pNewElement->GetCustomDataManager().Copy(&pElement->GetCustomDataManager());
         pNewElement->SetInterior(pElement->GetInterior());
         pNewElement->SetDimension(pElement->GetDimension());
 
@@ -890,13 +974,11 @@ bool CStaticFunctionDefinitions::SetElementData(CElement* pElement, const char* 
             BitStream.pBitStream->Write(szName, usNameLength);
             Variable.WriteToBitStream(*BitStream.pBitStream);
 
-            if (syncType == ESyncType::BROADCAST)
-                m_pPlayerManager->BroadcastOnlyJoined(CElementRPCPacket(pElement, SET_ELEMENT_DATA, *BitStream.pBitStream));
-            else
-                m_pPlayerManager->BroadcastOnlySubscribed(CElementRPCPacket(pElement, SET_ELEMENT_DATA, *BitStream.pBitStream), pElement, szName);
+            const CElementRPCPacket packet(pElement, SET_ELEMENT_DATA, *BitStream.pBitStream);
+            const size_t            numPlayers = syncType == ESyncType::BROADCAST ? m_pPlayerManager->BroadcastOnlyJoined(packet)
+                                                                                  : m_pPlayerManager->BroadcastOnlySubscribed(packet, pElement, szName);
 
-            CPerfStatEventPacketUsage::GetSingleton()->UpdateElementDataUsageOut(szName, m_pPlayerManager->Count(),
-                                                                                 BitStream.pBitStream->GetNumberOfBytesUsed());            
+            CPerfStatEventPacketUsage::GetSingleton()->UpdateElementDataUsageOut(szName, numPlayers, BitStream.pBitStream->GetNumberOfBytesUsed());
         }
 
         // Unsubscribe all the players
@@ -945,10 +1027,10 @@ bool CStaticFunctionDefinitions::AddElementDataSubscriber(CElement* pElement, co
     assert(szName);
     assert(pPlayer);
 
-    ESyncType     lastSyncType;
+    ESyncType     lastSyncType = ESyncType::LOCAL;
     CLuaArgument* pCurrentVariable = pElement->GetCustomData(szName, false, &lastSyncType);
 
-    if (lastSyncType == ESyncType::SUBSCRIBE)
+    if (pCurrentVariable != nullptr && lastSyncType == ESyncType::SUBSCRIBE)
     {
         if (!pPlayer->SubscribeElementData(pElement, szName))
             return false;
@@ -1342,12 +1424,12 @@ bool CStaticFunctionDefinitions::SetElementVisibleTo(CElement* pElement, CElemen
     {
         CPerPlayerEntity* pEntity = static_cast<CPerPlayerEntity*>(pElement);
         if (bVisible)
-            pEntity->AddVisibleToReference(pReference);
+            return pEntity->AddVisibleToReference(pReference);
         else
-            pEntity->RemoveVisibleToReference(pReference);
+            return pEntity->RemoveVisibleToReference(pReference);
     }
 
-    return true;
+    return false;
 }
 
 bool CStaticFunctionDefinitions::SetElementInterior(CElement* pElement, unsigned char ucInterior, bool bSetPosition, CVector& vecPosition)
@@ -1450,18 +1532,8 @@ bool CStaticFunctionDefinitions::AttachElements(CElement* pElement, CElement* pA
     assert(pElement);
     assert(pAttachedToElement);
 
-    // Check the elements we are attaching are not already connected
-    std::set<CElement*> history;
-    for (CElement* pCurrent = pAttachedToElement; pCurrent; pCurrent = pCurrent->GetAttachedToElement())
-    {
-        if (pCurrent == pElement)
-            return false;
-        if (MapContains(history, pCurrent))
-            break;            // This should not be possible, but you never know
-        MapInsert(history, pCurrent);
-    }
-
-    if (pElement->IsAttachToable() && pAttachedToElement->IsAttachable() && pElement->GetDimension() == pAttachedToElement->GetDimension())
+    if (pElement->IsAttachToable() && pAttachedToElement->IsAttachable() && !pAttachedToElement->IsAttachedToElement(pElement) &&
+        pElement->GetDimension() == pAttachedToElement->GetDimension())
     {
         pElement->SetAttachedOffsets(vecPosition, vecRotation);
         ConvertDegreesToRadians(vecRotation);
@@ -1582,24 +1654,15 @@ bool CStaticFunctionDefinitions::SetElementHealth(CElement* pElement, float fHea
         case CElement::PLAYER:
         {
             CPed* pPed = static_cast<CPed*>(pElement);
-            if (pPed->IsSpawned())
-            {
-                // Limit their max health to what the stat says
-                float fMaxHealth = pPed->GetMaxHealth();
-                if (fHealth > fMaxHealth)
-                    fHealth = fMaxHealth;
-
-                // Do not set the health below zero
-                if (fHealth < 0.0f)
-                    fHealth = 0.0f;
-
-                // This makes sure the health is set to what will get reported
-                unsigned char ucHealth = static_cast<unsigned char>(fHealth * 1.25f);
-                fHealth = static_cast<float>(ucHealth) / 1.25f;
-                pPed->SetHealth(fHealth);
-            }
-            else
+            if (!pPed->IsSpawned())
                 return false;
+
+            fHealth = Clamp(0.0f, fHealth, pPed->GetMaxHealth());
+            pPed->SetHealth(fHealth);
+
+            if (pPed->IsDead() && fHealth > 0.0f)
+                pPed->SetIsDead(false);
+
             break;
         }
         case CElement::VEHICLE:
@@ -1641,11 +1704,22 @@ bool CStaticFunctionDefinitions::SetElementModel(CElement* pElement, unsigned sh
                 return false;
             if (!CPlayerManager::IsValidPlayerModel(usModel))
                 return false;
-            CLuaArguments Arguments;
-            Arguments.PushNumber(pPed->GetModel());            // Get the old model
-            pPed->SetModel(usModel);                           // Set the new model
-            Arguments.PushNumber(usModel);                     // Get the new model
-            pPed->CallEvent("onElementModelChange", Arguments);
+            unsigned short usOldModel = pPed->GetModel();            // Get the old model
+            CLuaArguments  Arguments;
+            Arguments.PushNumber(usOldModel);
+            pPed->SetModel(usModel);                  // Set the new model
+            Arguments.PushNumber(usModel);            // Get the new model
+            bool bContinue = pPed->CallEvent("onElementModelChange", Arguments);
+            // Check for another call to setElementModel
+            if (usModel != pPed->GetModel())
+                return false;
+
+            if (!bContinue)
+            {
+                // Change canceled
+                pPed->SetModel(usOldModel);
+                return false;
+            }
             break;
         }
         case CElement::VEHICLE:
@@ -1655,11 +1729,22 @@ bool CStaticFunctionDefinitions::SetElementModel(CElement* pElement, unsigned sh
                 return false;
             if (!CVehicleManager::IsValidModel(usModel))
                 return false;
-            CLuaArguments Arguments;
-            Arguments.PushNumber(pVehicle->GetModel());            // Get the old model
-            pVehicle->SetModel(usModel);                           // Set the new model
-            Arguments.PushNumber(usModel);                         // Get the new model
-            pVehicle->CallEvent("onElementModelChange", Arguments);
+            unsigned short usOldModel = pVehicle->GetModel();            // Get the old model
+            CLuaArguments  Arguments;
+            Arguments.PushNumber(usOldModel);
+            pVehicle->SetModel(usModel);              // Set the new model
+            Arguments.PushNumber(usModel);            // Get the new model
+            bool bContinue = pVehicle->CallEvent("onElementModelChange", Arguments);
+            // Check for another call to setElementModel
+            if (usModel != pVehicle->GetModel())
+                return false;
+
+            if (!bContinue)
+            {
+                // Change canceled
+                pVehicle->SetModel(usOldModel);
+                return false;
+            }
 
             // Check for any passengers above the max seat list
             unsigned char ucMaxPassengers = pVehicle->GetMaxPassengers();
@@ -1670,13 +1755,14 @@ bool CStaticFunctionDefinitions::SetElementModel(CElement* pElement, unsigned sh
                 // Got a player in this seat and is it bigger than the supported amount
                 // of seats in this new vehicle
                 CPed* pPed = pVehicle->GetOccupant(i);
-                if (pPed && IS_PLAYER(pPed) && (i > ucMaxPassengers))
+                if (pPed && IS_PED(pPed) && (i > ucMaxPassengers))
                 {
                     // Throw him out
                     // TODO: Maybe relocate him in the future. Find a free seat if available and put him in it.
                     RemovePedFromVehicle(pPed);
                 }
             }
+
             break;
         }
         case CElement::OBJECT:
@@ -1686,11 +1772,22 @@ bool CStaticFunctionDefinitions::SetElementModel(CElement* pElement, unsigned sh
                 return false;
             if (!CObjectManager::IsValidModel(usModel))
                 return false;
-            CLuaArguments Arguments;
-            Arguments.PushNumber(pObject->GetModel());            // Get the old model
-            pObject->SetModel(usModel);                           // Set the new model
-            Arguments.PushNumber(usModel);                        // Get the new model
-            pObject->CallEvent("onElementModelChange", Arguments);
+            unsigned short usOldModel = pObject->GetModel();            // Get the old model
+            CLuaArguments  Arguments;
+            Arguments.PushNumber(usOldModel);
+            pObject->SetModel(usModel);               // Set the new model
+            Arguments.PushNumber(usModel);            // Get the new model
+            bool bContinue = pObject->CallEvent("onElementModelChange", Arguments);
+            // Check for another call to setElementModel
+            if (usModel != pObject->GetModel())
+                return false;
+
+            if (!bContinue)
+            {
+                // Change canceled
+                pObject->SetModel(usOldModel);
+                return false;
+            }
             break;
         }
         default:
@@ -1749,7 +1846,7 @@ bool CStaticFunctionDefinitions::ClearElementVisibleTo(CElement* pElement)
     return false;
 }
 
-bool CStaticFunctionDefinitions::SetElementSyncer(CElement* pElement, CPlayer* pPlayer, bool bEnable)
+bool CStaticFunctionDefinitions::SetElementSyncer(CElement* pElement, CPlayer* pPlayer, bool bEnable, bool bPersist)
 {
     assert(pElement);
 
@@ -1759,7 +1856,7 @@ bool CStaticFunctionDefinitions::SetElementSyncer(CElement* pElement, CPlayer* p
         {
             CPed* pPed = static_cast<CPed*>(pElement);
             pPed->SetSyncable(bEnable);
-            g_pGame->GetPedSync()->OverrideSyncer(pPed, pPlayer);
+            g_pGame->GetPedSync()->OverrideSyncer(pPed, pPlayer, bPersist);
             return true;
             break;
         }
@@ -1767,7 +1864,7 @@ bool CStaticFunctionDefinitions::SetElementSyncer(CElement* pElement, CPlayer* p
         {
             CVehicle* pVehicle = static_cast<CVehicle*>(pElement);
             pVehicle->SetUnoccupiedSyncable(bEnable);
-            g_pGame->GetUnoccupiedVehicleSync()->OverrideSyncer(pVehicle, pPlayer);
+            g_pGame->GetUnoccupiedVehicleSync()->OverrideSyncer(pVehicle, pPlayer, bPersist);
             return true;
             break;
         }
@@ -1925,14 +2022,6 @@ const CMtaVersion& CStaticFunctionDefinitions::GetPlayerVersion(CPlayer* pPlayer
     return pPlayer->GetPlayerVersion();
 }
 
-bool CStaticFunctionDefinitions::GetPlayerScriptDebugLevel(CPlayer* pPlayer, unsigned int& uiLevel)
-{
-    assert(pPlayer);
-
-    uiLevel = pPlayer->GetScriptDebugLevel();
-    return true;
-}
-
 bool CStaticFunctionDefinitions::SetPlayerName(CElement* pElement, const char* szName)
 {
     assert(pElement);
@@ -1998,6 +2087,11 @@ bool CStaticFunctionDefinitions::DetonateSatchels(CElement* pElement)
         CPlayer* pPlayer = static_cast<CPlayer*>(pElement);
         if (pPlayer->IsJoined())
         {
+            // Trigger Lua event and see if we are allowed to continue
+            CLuaArguments arguments;
+            if (!pPlayer->CallEvent("onPlayerDetonateSatchels", arguments))
+                return false;
+
             CDetonateSatchelsPacket Packet;
             Packet.SetSourceElement(pPlayer);
             m_pPlayerManager->BroadcastOnlyJoined(Packet);
@@ -2968,12 +3062,12 @@ bool CStaticFunctionDefinitions::SetPlayerMoney(CElement* pElement, long lMoney,
     {
         CPlayer* pPlayer = static_cast<CPlayer*>(pElement);
 
-        // Is it above 99999999? Limit it to it
-        if (lMoney > 99999999)
-            lMoney = 99999999;
-        // Is it below -99999999?
-        else if (lMoney < -99999999)
-            lMoney = -99999999;
+        // Is it above 999999999? Limit it to it
+        if (lMoney > 999999999)
+            lMoney = 999999999;
+        // Is it below -999999999?
+        else if (lMoney < -999999999)
+            lMoney = -999999999;
 
         // Tell him his new money
         CBitStream BitStream;
@@ -2998,19 +3092,19 @@ bool CStaticFunctionDefinitions::GivePlayerMoney(CElement* pElement, long lMoney
     {
         CPlayer* pPlayer = static_cast<CPlayer*>(pElement);
 
-        // Is it above 99999999? Limit it to it
-        if (lMoney > 99999999)
-            lMoney = 99999999;
-        // Is it below -99999999?
-        else if (lMoney < -99999999)
-            lMoney = -99999999;
+        // Is it above 999999999? Limit it to it
+        if (lMoney > 999999999)
+            lMoney = 999999999;
+        // Is it below -999999999?
+        else if (lMoney < -999999999)
+            lMoney = -999999999;
 
-        // Calculate his new money, if it exceeds 8 digits, set it to 99999999
+        // Calculate his new money, if it exceeds 9 digits, set it to 999999999
         long lNewMoney = pPlayer->GetMoney() + lMoney;
-        if (lNewMoney > 99999999)
-            lNewMoney = 99999999;
-        else if (lNewMoney < -99999999)
-            lNewMoney = -99999999;
+        if (lNewMoney > 999999999)
+            lNewMoney = 999999999;
+        else if (lNewMoney < -999999999)
+            lNewMoney = -999999999;
 
         // Tell him his new money
         CBitStream BitStream;
@@ -3360,34 +3454,6 @@ bool CStaticFunctionDefinitions::SetPlayerBlurLevel(CElement* pElement, unsigned
     return false;
 }
 
-bool CStaticFunctionDefinitions::SetPlayerDiscordJoinParams(CElement* pElement, SString& strKey, SString& strPartyId, uint uiPartySize, uint uiPartyMax)
-{
-    assert(pElement);
-
-    if (uiPartyMax > m_pMainConfig->GetMaxPlayers() || uiPartySize > uiPartyMax || strKey.length() > 64 || strPartyId.length() > 64 || strKey.find(' ') != SString::npos || strPartyId.find(' ') != SString::npos)
-        return false;
-
-    RUN_CHILDREN(SetPlayerDiscordJoinParams(*iter, strKey, strPartyId, uiPartySize, uiPartyMax))
-
-    if (IS_PLAYER(pElement))
-    {
-        CPlayer* pPlayer = static_cast<CPlayer*>(pElement);
-
-        if (pPlayer->GetBitStreamVersion() < 0x06E)
-            return false;
-
-        CBitStream bitStream;
-        bitStream.pBitStream->WriteString<uchar>(strKey);
-        bitStream.pBitStream->WriteString<uchar>(strPartyId);
-        bitStream.pBitStream->Write(uiPartySize);
-        bitStream.pBitStream->Write(uiPartyMax);
-        pPlayer->Send(CLuaPacket(SET_DISCORD_JOIN_PARAMETERS, *bitStream.pBitStream));
-
-        return true;
-    }
-    return false;
-}
-
 bool CStaticFunctionDefinitions::RedirectPlayer(CElement* pElement, const char* szHost, unsigned short usPort, const char* szPassword)
 {
     if (IS_PLAYER(pElement))
@@ -3409,6 +3475,7 @@ bool CStaticFunctionDefinitions::RedirectPlayer(CElement* pElement, const char* 
             BitStream.pBitStream->Write(ucPasswordLength);
             BitStream.pBitStream->Write(szPassword, ucPasswordLength);
         }
+        pPlayer->SetRedirecting(true);
         pPlayer->Send(CLuaPacket(FORCE_RECONNECT, *BitStream.pBitStream));
 
         usPort = usPort ? usPort : g_pGame->GetConfig()->GetServerPort();
@@ -3631,8 +3698,13 @@ bool CStaticFunctionDefinitions::KillPed(CElement* pElement, CElement* pKiller, 
         // Is the ped alive?
         if (!pPed->IsDead() && pPed->IsSpawned())
         {
+            // Reset his vehicle action, but only if not jacking
+            // If jacking we wait for him to reply with VEHICLE_NOTIFY_JACK_ABORT
+            // We don't know if he actually jacked the person at this point, and we need to set the jacked person correctly (fix for #908)
+            if (pPed->GetVehicleAction() != CPed::VEHICLEACTION_JACKING)
+                pPed->SetVehicleAction(CPed::VEHICLEACTION_NONE);
+
             // Remove him from any occupied vehicle
-            pPed->SetVehicleAction(CPed::VEHICLEACTION_NONE);
             CVehicle* pVehicle = pPed->GetOccupiedVehicle();
             if (pVehicle)
             {
@@ -3669,6 +3741,8 @@ bool CStaticFunctionDefinitions::KillPed(CElement* pElement, CElement* pKiller, 
             else
                 Arguments.PushBoolean(false);
             Arguments.PushBoolean(bStealth);
+            Arguments.PushBoolean(false);
+            Arguments.PushBoolean(false);
             // TODO: change to onPedWasted
             if (IS_PLAYER(pPed))
             {
@@ -4057,6 +4131,8 @@ bool CStaticFunctionDefinitions::SetPedWeaponSlot(CElement* pElement, unsigned c
         CPed* pPed = static_cast<CPed*>(pElement);
         if (pPed->IsSpawned())
         {
+            pPed->SetWeaponSlot(ucWeaponSlot);
+
             CBitStream BitStream;
 
             SWeaponSlotSync slot;
@@ -4076,10 +4152,16 @@ bool CStaticFunctionDefinitions::WarpPedIntoVehicle(CPed* pPed, CVehicle* pVehic
     assert(pPed);
     assert(pVehicle);
 
+    if (uiSeat > pVehicle->GetMaxPassengers())
+        return false;
+
+    if (uiSeat > 0 && pVehicle->GetMaxPassengers() == VEHICLE_PASSENGERS_UNDEFINED)
+        return false;
+
     // Valid seat id for that vehicle?
     // Temp fix: Disable driver seat for train carriages since the whole vehicle sync logic is based on the the player on the first seat being the vehicle
     // syncer (Todo)
-    if (uiSeat <= pVehicle->GetMaxPassengers() && (pVehicle->GetVehicleType() != VEHICLE_TRAIN || !pVehicle->GetTowedByVehicle()))
+    if (pVehicle->GetVehicleType() != VEHICLE_TRAIN || !pVehicle->GetTowedByVehicle())
     {
         if (!pPed->IsDead())
         {
@@ -4087,7 +4169,7 @@ bool CStaticFunctionDefinitions::WarpPedIntoVehicle(CPed* pPed, CVehicle* pVehic
             {
                 CPed* pPreviousOccupant = pVehicle->GetOccupant(uiSeat);
                 // Make sure no one is entering or he will get stuck in the entry packet handshaking and network trouble
-                if (pPreviousOccupant == NULL || (pPreviousOccupant && pPreviousOccupant->GetVehicleAction() == CPlayer::VEHICLEACTION_NONE))
+                if (pPreviousOccupant == NULL || (pPreviousOccupant && pPreviousOccupant->GetVehicleAction() == CPed::VEHICLEACTION_NONE))
                 {
                     // Toss the previous player out of it if neccessary
                     if (pPreviousOccupant)
@@ -4109,7 +4191,7 @@ bool CStaticFunctionDefinitions::WarpPedIntoVehicle(CPed* pPed, CVehicle* pVehic
 
                     // Put him in the new vehicle
                     pPed->SetOccupiedVehicle(pVehicle, uiSeat);
-                    pPed->SetVehicleAction(CPlayer::VEHICLEACTION_NONE);
+                    pPed->SetVehicleAction(CPed::VEHICLEACTION_NONE);
 
                     // If he's the driver, switch on the engine
                     if (uiSeat == 0)
@@ -4131,7 +4213,10 @@ bool CStaticFunctionDefinitions::WarpPedIntoVehicle(CPed* pPed, CVehicle* pVehic
                     else
                         PlayerVehicleArguments.PushBoolean(false);
                     // Leave onPlayerVehicleEnter for backwards compatibility
-                    pPed->CallEvent("onPlayerVehicleEnter", PlayerVehicleArguments);
+                    if (IS_PLAYER(pPed))
+                        pPed->CallEvent("onPlayerVehicleEnter", PlayerVehicleArguments);
+                    else
+                        pPed->CallEvent("onPedVehicleEnter", PlayerVehicleArguments);
 
                     // Call the vehicle->player event
                     CLuaArguments VehiclePlayerArguments;
@@ -4160,7 +4245,7 @@ bool CStaticFunctionDefinitions::RemovePedFromVehicle(CElement* pElement)
     assert(pElement);
     RUN_CHILDREN(RemovePedFromVehicle(*iter))
 
-    // Verify the player and the vehicle pointer
+    // Verify the ped and the vehicle pointer
     if (IS_PED(pElement))
     {
         CPed* pPed = static_cast<CPed*>(pElement);
@@ -4170,28 +4255,28 @@ bool CStaticFunctionDefinitions::RemovePedFromVehicle(CElement* pElement)
         unsigned char ucOccupiedSeat = pPed->GetOccupiedVehicleSeat();
         if (pVehicle)
         {
-            CPlayer* pPlayer = static_cast<CPlayer*>(pElement);
-            if (pPlayer && IS_PLAYER(pElement))
-            {
-                CLuaArguments Arguments;
-                Arguments.PushElement(pVehicle);                 // vehicle
-                Arguments.PushNumber(ucOccupiedSeat);            // seat
-                Arguments.PushBoolean(false);                    // jacker
-                Arguments.PushBoolean(true);                     // forcedByScript
-                pPlayer->CallEvent("onPlayerVehicleExit", Arguments);
+            CLuaArguments Arguments;
+            Arguments.PushElement(pVehicle);                 // vehicle
+            Arguments.PushNumber(ucOccupiedSeat);            // seat
+            Arguments.PushBoolean(false);                    // jacker
+            Arguments.PushBoolean(true);                     // forcedByScript
+            if (IS_PLAYER(pPed))
+                pPed->CallEvent("onPlayerVehicleExit", Arguments);
+            else
+                pPed->CallEvent("onPedVehicleExit", Arguments);
 
-                // Call the vehicle->player event
-                CLuaArguments Arguments2;
-                Arguments2.PushElement(pPlayer);                  // player
-                Arguments2.PushNumber(ucOccupiedSeat);            // seat
-                Arguments2.PushBoolean(false);                    // jacker
-                Arguments2.PushBoolean(true);                     // forcedByScript
-                pVehicle->CallEvent("onVehicleExit", Arguments2);
-            }
+            // Call the vehicle->ped event
+            CLuaArguments Arguments2;
+            Arguments2.PushElement(pPed);                     // player / ped
+            Arguments2.PushNumber(ucOccupiedSeat);            // seat
+            Arguments2.PushBoolean(false);                    // jacker
+            Arguments2.PushBoolean(true);                     // forcedByScript
+            pVehicle->CallEvent("onVehicleExit", Arguments2);
+
             // Remove him from the vehicle
             pVehicle->SetOccupant(NULL, ucOccupiedSeat);
             pPed->SetOccupiedVehicle(NULL, 0);
-            pPed->SetVehicleAction(CPlayer::VEHICLEACTION_NONE);
+            pPed->SetVehicleAction(CPed::VEHICLEACTION_NONE);
 
             // Tell the players
             CBitStream BitStream;
@@ -4244,20 +4329,20 @@ bool CStaticFunctionDefinitions::SetPedAnimation(CElement* pElement, const SStri
         CPed* pPed = static_cast<CPed*>(pElement);
         if (pPed->IsSpawned())
         {
-            // Remove jetpack now so it doesn't stay on (#9522#c25612)
-            if (pPed->HasJetPack())
-                pPed->SetHasJetPack(false);
-
-            // Remove choking state
-            if (pPed->IsChoking())
-                pPed->SetChoking(false);
-
             // TODO: save their animation?
 
             // Tell the players
             CBitStream BitStream;
             if (!blockName.empty() && !animName.empty())
             {
+                // Remove jetpack now so it doesn't stay on (#9522#c25612)
+                if (pPed->HasJetPack())
+                    pPed->SetHasJetPack(false);
+
+                // Remove choking state
+                if (pPed->IsChoking())
+                    pPed->SetChoking(false);
+
                 BitStream.pBitStream->WriteString<unsigned char>(blockName);
                 BitStream.pBitStream->WriteString<unsigned char>(animName);
                 BitStream.pBitStream->Write(iTime);
@@ -4506,20 +4591,27 @@ bool CStaticFunctionDefinitions::SetCameraTarget(CElement* pElement, CElement* p
         if (!pTarget)
             pTarget = pPlayer;
 
-        // Make sure our target is a player element
-        if (pTarget->GetType() == CElement::PLAYER)
+        // Make sure our target is supported
+        switch (pTarget->GetType())
         {
-            pCamera->SetMode(CAMERAMODE_PLAYER);
-            pCamera->SetTarget(pTarget);
-            pCamera->SetRoll(0.0f);
-            pCamera->SetFOV(70.0f);
+            case CElement::PLAYER:
+            case CElement::PED:
+            case CElement::VEHICLE:
+            {
+                pCamera->SetMode(CAMERAMODE_PLAYER);
+                pCamera->SetTarget(pTarget);
+                pCamera->SetRoll(0.0f);
+                pCamera->SetFOV(70.0f);
 
-            CBitStream BitStream;
-            if (pPlayer->GetBitStreamVersion() >= 0x5E)
-                BitStream.pBitStream->Write(pCamera->GenerateSyncTimeContext());
-            BitStream.pBitStream->Write(pTarget->GetID());
-            pPlayer->Send(CLuaPacket(SET_CAMERA_TARGET, *BitStream.pBitStream));
-            return true;
+                CBitStream BitStream;
+                if (pPlayer->GetBitStreamVersion() >= 0x5E)
+                    BitStream.pBitStream->Write(pCamera->GenerateSyncTimeContext());
+                BitStream.pBitStream->Write(pTarget->GetID());
+                pPlayer->Send(CLuaPacket(SET_CAMERA_TARGET, *BitStream.pBitStream));
+                return true;
+            }
+            default:
+                return false;
         }
     }
 
@@ -4774,7 +4866,7 @@ bool CStaticFunctionDefinitions::SetWeaponAmmo(CElement* pElement, unsigned char
 }
 
 CVehicle* CStaticFunctionDefinitions::CreateVehicle(CResource* pResource, unsigned short usModel, const CVector& vecPosition, const CVector& vecRotation,
-                                                    const char* szRegPlate, unsigned char ucVariant, unsigned char ucVariant2)
+                                                    const char* szRegPlate, unsigned char ucVariant, unsigned char ucVariant2, bool bSynced)
 {
     unsigned char ucVariation = ucVariant;
     unsigned char ucVariation2 = ucVariant2;
@@ -4793,6 +4885,7 @@ CVehicle* CStaticFunctionDefinitions::CreateVehicle(CResource* pResource, unsign
         pVehicle->SetRotationDegrees(vecRotation);
         pVehicle->SetRespawnPosition(vecPosition);
         pVehicle->SetRespawnRotationDegrees(vecRotation);
+        pVehicle->SetUnoccupiedSyncable(bSynced);
 
         if (szRegPlate && szRegPlate[0])
             pVehicle->SetRegPlate(szRegPlate);
@@ -4911,6 +5004,7 @@ bool CStaticFunctionDefinitions::RemoveVehicleSirens(CVehicle* pVehicle)
     assert(pVehicle);
 
     pVehicle->m_tSirenBeaconInfo.m_bOverrideSirens = false;
+    pVehicle->SetSirenActive(false);
     pVehicle->RemoveVehicleSirens();
 
     CBitStream BitStream;
@@ -5236,19 +5330,6 @@ bool CStaticFunctionDefinitions::GetTrainSpeed(CVehicle* pVehicle, float& fSpeed
     return true;
 }
 
-bool CStaticFunctionDefinitions::GetTrainTrack(CVehicle* pVehicle, uchar& ucTrack)
-{
-    assert(pVehicle);
-
-    if (pVehicle->GetVehicleType() != VEHICLE_TRAIN)
-        return false;
-    else if (pVehicle->IsDerailed())
-        return false;
-
-    ucTrack = pVehicle->GetTrainTrack();
-    return true;
-}
-
 bool CStaticFunctionDefinitions::GetTrainPosition(CVehicle* pVehicle, float& fPosition)
 {
     assert(pVehicle);
@@ -5276,9 +5357,9 @@ bool CStaticFunctionDefinitions::FixVehicle(CElement* pElement)
         pVehicle->GenerateSyncTimeContext();
 
         // Repair it
+        pVehicle->SetBlowState(VehicleBlowState::INTACT);
         pVehicle->SetHealth(DEFAULT_VEHICLE_HEALTH);
         pVehicle->ResetDoorsWheelsPanelsLights();
-        pVehicle->SetIsBlown(false);
 
         // Tell everyone
         CBitStream BitStream;
@@ -5291,43 +5372,37 @@ bool CStaticFunctionDefinitions::FixVehicle(CElement* pElement)
     return false;
 }
 
-bool CStaticFunctionDefinitions::BlowVehicle(CElement* pElement, bool bExplode)
+bool CStaticFunctionDefinitions::BlowVehicle(CElement* pElement, std::optional<bool> withExplosion)
 {
-    assert(pElement);
-    RUN_CHILDREN(BlowVehicle(*iter, bExplode))
+    RUN_CHILDREN(BlowVehicle(*iter, withExplosion))
 
-    if (IS_VEHICLE(pElement))
-    {
-        CVehicle* pVehicle = static_cast<CVehicle*>(pElement);
+    if (!IS_VEHICLE(pElement))
+        return false;
 
-        // Blow it up on our records. Also change the sync time context or this vehicle
-        // is likely to blow up twice, call the events twice and all that if someone's
-        // nearby and syncing it.
-        if (IsVehicleBlown(pVehicle) == false)
-        {
-            // Call the onVehicleExplode event
-            CLuaArguments Arguments;
-            pVehicle->CallEvent("onVehicleExplode", Arguments);
-        }
-        pVehicle->SetHealth(0.0f);
-        if (!bExplode)
-            pVehicle->SetIsBlown(true);
+    CVehicle* vehicle = static_cast<CVehicle*>(pElement);
 
-        // Update our engine State
-        pVehicle->SetEngineOn(false);
+    if (vehicle->IsBlown() || vehicle->IsBeingDeleted())
+        return false;
 
-        CBitStream BitStream;
-        BitStream.pBitStream->Write(pVehicle->GenerateSyncTimeContext());
-        m_pPlayerManager->BroadcastOnlyJoined(CElementRPCPacket(pVehicle, BLOW_VEHICLE, *BitStream.pBitStream));
+    bool createExplosion = withExplosion.value_or(true);
+    vehicle->SetBlowState(createExplosion ? VehicleBlowState::AWAITING_EXPLOSION_SYNC : VehicleBlowState::BLOWN);
+
+    CLuaArguments arguments;
+    arguments.PushBoolean(createExplosion);            // withExplosion
+    vehicle->CallEvent("onVehicleExplode", arguments);
+
+    // Abort if vehicle got fixed or destroyed
+    if (!vehicle->IsBlown() || vehicle->IsBeingDeleted())
         return true;
-    }
 
-    return false;
-}
-bool CStaticFunctionDefinitions::IsVehicleBlown(CVehicle* pVehicle)
-{
-    assert(pVehicle);
-    return pVehicle->GetIsBlown();
+    vehicle->SetHealth(0.0f);
+    vehicle->SetEngineOn(false);
+
+    CBitStream BitStream;
+    BitStream.pBitStream->Write(vehicle->GenerateSyncTimeContext());
+    BitStream.pBitStream->WriteBit(createExplosion);            // only consumed by clients with at least eBitStreamVersion::VehicleBlowStateSupport
+    m_pPlayerManager->BroadcastOnlyJoined(CElementRPCPacket(vehicle, BLOW_VEHICLE, *BitStream.pBitStream));
+    return true;
 }
 
 bool CStaticFunctionDefinitions::GetVehicleHeadLightColor(CVehicle* pVehicle, SColor& outColor)
@@ -6791,9 +6866,8 @@ bool CStaticFunctionDefinitions::ResetVehicleExplosionTime(CElement* pElement)
 
     if (IS_VEHICLE(pElement))
     {
-        CVehicle* pVehicle = static_cast<CVehicle*>(pElement);
-        pVehicle->SetIsBlown(false);
-
+        CVehicle* vehicle = static_cast<CVehicle*>(pElement);
+        vehicle->ResetExplosionTimer();
         return true;
     }
 
@@ -7165,25 +7239,6 @@ bool CStaticFunctionDefinitions::SetTrainSpeed(CVehicle* pVehicle, float fSpeed)
     BitStream.pBitStream->Write(fSpeed);
 
     m_pPlayerManager->BroadcastOnlyJoined(CElementRPCPacket(pVehicle, SET_TRAIN_SPEED, *BitStream.pBitStream));
-
-    return true;
-}
-
-bool CStaticFunctionDefinitions::SetTrainTrack(CVehicle* pVehicle, uchar ucTrack)
-{
-    assert(pVehicle);
-
-    if (pVehicle->GetVehicleType() != VEHICLE_TRAIN)
-        return false;
-    else if (pVehicle->IsDerailed())
-        return false;
-
-    pVehicle->SetTrainTrack(ucTrack);
-
-    CBitStream BitStream;
-    BitStream.pBitStream->Write(ucTrack);
-
-    m_pPlayerManager->BroadcastOnlyJoined(CElementRPCPacket(pVehicle, SET_TRAIN_TRACK, *BitStream.pBitStream));
 
     return true;
 }
@@ -7599,7 +7654,7 @@ bool CStaticFunctionDefinitions::SetVehicleDoorOpenRatio(CElement* pElement, uns
 }
 
 CMarker* CStaticFunctionDefinitions::CreateMarker(CResource* pResource, const CVector& vecPosition, const char* szType, float fSize, const SColor color,
-                                                  CElement* pVisibleTo)
+                                                  CElement* pVisibleTo, bool ignoreAlphaLimits)
 {
     assert(szType);
 
@@ -7615,6 +7670,7 @@ CMarker* CStaticFunctionDefinitions::CreateMarker(CResource* pResource, const CV
             // Set the properties
             pMarker->SetPosition(vecPosition);
             pMarker->SetMarkerType(ucType);
+            pMarker->SetIgnoreAlphaLimits(ignoreAlphaLimits);
             pMarker->SetColor(color);
             pMarker->SetSize(fSize);
 
@@ -7785,6 +7841,24 @@ bool CStaticFunctionDefinitions::SetMarkerIcon(CElement* pElement, const char* s
     }
 
     return false;
+}
+
+bool CStaticFunctionDefinitions::SetMarkerTargetArrowProperties(CElement* pElement, const SColor color, float size)
+{
+    RUN_CHILDREN(SetMarkerTargetArrowProperties(*iter, color, size))
+
+    if (!IS_MARKER(pElement))
+        return false;
+
+    CMarker* marker = static_cast<CMarker*>(pElement);
+    if (!marker)
+        return false;
+
+    if (!marker->HasTarget() || marker->GetMarkerType() != CMarker::TYPE_CHECKPOINT)
+        return false;
+
+    marker->SetTargetArrowProperties(color, size);
+    return true;
 }
 
 CBlip* CStaticFunctionDefinitions::CreateBlip(CResource* pResource, const CVector& vecPosition, unsigned char ucIcon, unsigned char ucSize, const SColor color,
@@ -8049,6 +8123,9 @@ CObject* CStaticFunctionDefinitions::CreateObject(CResource* pResource, unsigned
     pObject->SetRotation(vecRadians);
     pObject->SetModel(usModelID);
 
+    if (CObjectManager::IsBreakableModel(usModelID))
+        pObject->SetBreakable(true);
+
     if (pResource->IsClientSynced())
     {
         CEntityAddPacket Packet;
@@ -8191,6 +8268,27 @@ bool CStaticFunctionDefinitions::StopObject(CElement* pElement)
     return false;
 }
 
+bool CStaticFunctionDefinitions::BreakObject(CElement* pElement)
+{
+    RUN_CHILDREN(BreakObject(*iter));
+
+    if (!IS_OBJECT(pElement))
+        return false;
+
+    CObject* pObject = static_cast<CObject*>(pElement);
+
+    if (!pObject)
+        return false;
+
+    if (!pObject->IsBreakable())
+        return false;
+
+    CBitStream BitStream;
+    m_pPlayerManager->BroadcastOnlyJoined(CElementRPCPacket(pObject, BREAK_OBJECT, *BitStream.pBitStream));
+    
+    return true;
+}
+
 bool CStaticFunctionDefinitions::SetObjectVisibleInAllDimensions(CElement* pElement, bool bVisible, unsigned short usNewDimension)
 {
     RUN_CHILDREN(SetObjectVisibleInAllDimensions(*iter, bVisible, usNewDimension))
@@ -8226,6 +8324,75 @@ bool CStaticFunctionDefinitions::IsObjectVisibleInAllDimensions(CElement* pEleme
     }
 
     return false;
+}
+
+bool CStaticFunctionDefinitions::IsObjectBreakable(CElement* pElement)
+{
+    if (IS_OBJECT(pElement))
+    {
+        CObject* pObject = static_cast<CObject*>(pElement);
+
+        return pObject->IsBreakable();
+    }
+
+    return false;
+}
+
+bool CStaticFunctionDefinitions::SetObjectBreakable(CElement* pElement, const bool bBreakable)
+{
+    RUN_CHILDREN(SetObjectBreakable(*iter, bBreakable))
+
+    if (IS_OBJECT(pElement))
+    {
+        CObject* pObject = static_cast<CObject*>(pElement);
+
+        pObject->SetBreakable(bBreakable);
+
+        CBitStream BitStream;
+        BitStream.pBitStream->WriteBit(bBreakable);
+        m_pPlayerManager->BroadcastOnlyJoined(CElementRPCPacket(pElement, SET_OBJECT_BREAKABLE, *BitStream.pBitStream));
+
+        return true;
+    }
+
+    return false;
+}
+
+bool CStaticFunctionDefinitions::RespawnObject(CElement* const pElement) noexcept
+{
+    RUN_CHILDREN(RespawnObject(*iter));
+
+    if (!IS_OBJECT(pElement))
+        return false;
+
+    CObject* pObject = static_cast<CObject*>(pElement);
+    if (!pObject)
+        return false;
+
+    CBitStream BitStream;
+    m_pPlayerManager->BroadcastOnlyJoined(CElementRPCPacket(pObject, RESPAWN_OBJECT, *BitStream.pBitStream));
+
+    return true;
+}
+
+bool CStaticFunctionDefinitions::ToggleObjectRespawn(CElement* const pElement, const bool bRespawn) noexcept
+{
+    RUN_CHILDREN(ToggleObjectRespawn(*iter, bRespawn));
+
+    if (!IS_OBJECT(pElement))
+        return false;
+
+    CObject* pObject = static_cast<CObject*>(pElement);
+    if (!pObject)
+        return false;
+
+    pObject->SetRespawnEnabled(bRespawn);
+
+    CBitStream BitStream;
+    BitStream->WriteBit(bRespawn);
+    m_pPlayerManager->BroadcastOnlyJoined(CElementRPCPacket(pObject, TOGGLE_OBJECT_RESPAWN, *BitStream.pBitStream));
+
+    return true;
 }
 
 CRadarArea* CStaticFunctionDefinitions::CreateRadarArea(CResource* pResource, const CVector2D& vecPosition2D, const CVector2D& vecSize, const SColor color,
@@ -8583,21 +8750,30 @@ bool CStaticFunctionDefinitions::UsePickup(CElement* pElement, CPlayer* pPlayer)
 
 bool CStaticFunctionDefinitions::CreateExplosion(const CVector& vecPosition, unsigned char ucType, CElement* pElement)
 {
+    CLuaArguments arguments;
+    arguments.PushNumber(vecPosition.fX);
+    arguments.PushNumber(vecPosition.fY);
+    arguments.PushNumber(vecPosition.fZ);
+    arguments.PushNumber(ucType);
+
     if (pElement)
     {
         RUN_CHILDREN(CreateExplosion(vecPosition, ucType, *iter))
-
-        // Tell everyone
+        
         if (IS_PLAYER(pElement))
         {
-            CPlayer*             pPlayer = static_cast<CPlayer*>(pElement);
-            CExplosionSyncPacket Packet(vecPosition, ucType);
-            Packet.SetSourceElement(pPlayer);
-            m_pPlayerManager->BroadcastOnlyJoined(Packet);
-            return true;
+            CPlayer* player = static_cast<CPlayer*>(pElement);
+
+            if (player->CallEvent("onExplosion", arguments))
+            {
+                CExplosionSyncPacket Packet(vecPosition, ucType);
+                Packet.SetSourceElement(player);
+                m_pPlayerManager->BroadcastOnlyJoined(Packet);
+                return true;
+            }
         }
     }
-    else
+    else if (m_pMapManager->GetRootElement()->CallEvent("onExplosion", arguments))
     {
         CExplosionSyncPacket Packet(vecPosition, ucType);
         m_pPlayerManager->BroadcastOnlyJoined(Packet);
@@ -9119,21 +9295,34 @@ bool CStaticFunctionDefinitions::SetPlayerTeam(CPlayer* pPlayer, CTeam* pTeam)
 {
     assert(pPlayer);
 
+    CTeam* currentTeam = pPlayer->GetTeam();
     // If its a different team
-    if (pTeam != pPlayer->GetTeam())
+    if (pTeam == currentTeam)
+        return false;
+
+    // Call the Event
+    CLuaArguments Arguments;
+    if (currentTeam)
     {
-        // Change his team
-        pPlayer->SetTeam(pTeam, true);
-
-        // Tell everyone his new team
-        CBitStream BitStream;
-        BitStream.pBitStream->Write(pTeam ? pTeam->GetID() : INVALID_ELEMENT_ID);
-        m_pPlayerManager->BroadcastOnlyJoined(CElementRPCPacket(pPlayer, SET_PLAYER_TEAM, *BitStream.pBitStream));
-
-        return true;
+        Arguments.PushElement(currentTeam);
+    } 
+    else
+    {
+        Arguments.PushNil(); // No oldTeam return nil
     }
+    Arguments.PushElement(pTeam);
+    if (!pPlayer->CallEvent("onPlayerTeamChange", Arguments))
+        return false; // Event cancelled, return false
 
-    return false;
+    // Change his team
+    pPlayer->SetTeam(pTeam, true);
+
+    // Tell everyone his new team
+    CBitStream BitStream;
+    BitStream.pBitStream->Write(pTeam ? pTeam->GetID() : INVALID_ELEMENT_ID);
+    m_pPlayerManager->BroadcastOnlyJoined(CElementRPCPacket(pPlayer, SET_PLAYER_TEAM, *BitStream.pBitStream));
+
+    return true;
 }
 
 bool CStaticFunctionDefinitions::SetTeamFriendlyFire(CTeam* pTeam, bool bFriendlyFire)
@@ -9209,13 +9398,15 @@ bool CStaticFunctionDefinitions::SetAllElementWaterLevel(float fLevel)
     return true;
 }
 
-bool CStaticFunctionDefinitions::SetWorldWaterLevel(float fLevel, bool bIncludeWorldNonSeaLevel)
+bool CStaticFunctionDefinitions::SetWorldWaterLevel(float fLevel, bool bIncludeWorldNonSeaLevel, bool bIncludeWorldSeaLevel, bool bIncludeOutsideWorldLevel)
 {
-    g_pGame->GetWaterManager()->SetWorldWaterLevel(fLevel, bIncludeWorldNonSeaLevel);
+    g_pGame->GetWaterManager()->SetWorldWaterLevel(fLevel, bIncludeWorldNonSeaLevel, bIncludeWorldSeaLevel, bIncludeOutsideWorldLevel);
 
     CBitStream BitStream;
     BitStream.pBitStream->Write(fLevel);
     BitStream.pBitStream->WriteBit(bIncludeWorldNonSeaLevel);
+    BitStream.pBitStream->WriteBit(bIncludeWorldSeaLevel);
+    BitStream.pBitStream->WriteBit(bIncludeOutsideWorldLevel);
     m_pPlayerManager->BroadcastOnlyJoined(CLuaPacket(SET_WORLD_WATER_LEVEL, *BitStream.pBitStream));
     return true;
 }
@@ -9527,7 +9718,7 @@ bool CStaticFunctionDefinitions::SetColPolygonPointPosition(CColPolygon* pColPol
     {
         RefreshColShapeColliders(pColPolygon);
 
-        CBitStream BitStream;
+        CBitStream      BitStream;
         SPosition2DSync size(false);
         size.data.vecPosition = vecPoint;
         BitStream.pBitStream->Write(&size);
@@ -9580,7 +9771,7 @@ bool CStaticFunctionDefinitions::RemoveColPolygonPoint(CColPolygon* pColPolygon,
     {
         RefreshColShapeColliders(pColPolygon);
 
-        CBitStream      BitStream;
+        CBitStream BitStream;
         BitStream.pBitStream->Write(uiPointIndex);
         m_pPlayerManager->BroadcastOnlyJoined(CElementRPCPacket(pColPolygon, REMOVE_COLPOLYGON_POINT, *BitStream.pBitStream));
         return true;
@@ -10080,7 +10271,7 @@ bool CStaticFunctionDefinitions::OutputChatBox(const char* szText, CElement* pEl
     assert(szText);
 
     RUN_CHILDREN(OutputChatBox(szText, *iter, ucRed, ucGreen, ucBlue, bColorCoded, pLuaMain))
-    
+
     if (IS_PLAYER(pElement))
     {
         CPlayer* pPlayer = static_cast<CPlayer*>(pElement);
@@ -10109,22 +10300,19 @@ void CStaticFunctionDefinitions::OutputChatBox(const char* szText, const std::ve
     CPlayerManager::Broadcast(CChatEchoPacket(szText, ucRed, ucGreen, ucBlue, bColorCoded), sendList);
 }
 
-bool CStaticFunctionDefinitions::ClearChatBox(CElement* pElement)
+void CStaticFunctionDefinitions::ClearChatBox(CElement* pElement)
 {
     assert(pElement);
-
     RUN_CHILDREN(ClearChatBox(*iter))
 
     if (IS_PLAYER(pElement))
     {
         CPlayer* pPlayer = static_cast<CPlayer*>(pElement);
         pPlayer->Send(CChatClearPacket());
-        return true;
     }
-    return false;
 }
 
-bool CStaticFunctionDefinitions::OutputConsole(const char* szText, CElement* pElement)
+void CStaticFunctionDefinitions::OutputConsole(const char* szText, CElement* pElement)
 {
     assert(pElement);
     assert(szText);
@@ -10134,10 +10322,7 @@ bool CStaticFunctionDefinitions::OutputConsole(const char* szText, CElement* pEl
     {
         CPlayer* pPlayer = static_cast<CPlayer*>(pElement);
         pPlayer->Send(CConsoleEchoPacket(szText));
-        return true;
     }
-
-    return false;
 }
 
 bool CStaticFunctionDefinitions::SetServerPassword(const SString& strPassword, bool bSave)
@@ -10148,6 +10333,7 @@ bool CStaticFunctionDefinitions::SetServerPassword(const SString& strPassword, b
             CLogger::LogPrintf("Server password set to '%s'\n", *strPassword);
         else
             CLogger::LogPrintf("Server password cleared\n");
+
         return true;
     }
 
@@ -10678,6 +10864,27 @@ bool CStaticFunctionDefinitions::SendSyncIntervals(CPlayer* pPlayer)
     return true;
 }
 
+void CStaticFunctionDefinitions::SendClientTransferBoxVisibility(CPlayer* player)
+{
+    CBitStream BitStream;
+    BitStream->WriteBit(g_pGame->IsClientTransferBoxVisible());
+
+    if (player)
+        player->Send(CLuaPacket(SET_TRANSFER_BOX_VISIBILITY, *BitStream.pBitStream));
+    else
+        m_pPlayerManager->BroadcastOnlyJoined(CLuaPacket(SET_TRANSFER_BOX_VISIBILITY, *BitStream.pBitStream));
+}
+
+bool CStaticFunctionDefinitions::SetClientTransferBoxVisible(bool visible)
+{
+    if (g_pGame->IsClientTransferBoxVisible() == visible)
+        return false;
+
+    g_pGame->SetClientTransferBoxVisible(visible);
+    SendClientTransferBoxVisibility();
+    return true;
+}
+
 bool CStaticFunctionDefinitions::SetWeather(unsigned char ucWeather)
 {
     // Verify it's within the max valid weather id
@@ -10925,6 +11132,25 @@ bool CStaticFunctionDefinitions::IsGlitchEnabled(const std::string& strGlitchNam
         return true;
     }
     return false;
+}
+
+bool CStaticFunctionDefinitions::IsWorldSpecialPropertyEnabled(WorldSpecialProperty property)
+{
+    return g_pGame->IsWorldSpecialPropertyEnabled(property);
+}
+
+bool CStaticFunctionDefinitions::SetWorldSpecialPropertyEnabled(WorldSpecialProperty property, bool isEnabled)
+{
+    if (g_pGame->IsWorldSpecialPropertyEnabled(property) == isEnabled)
+        return false;
+
+    g_pGame->SetWorldSpecialPropertyEnabled(property, isEnabled);
+
+    CBitStream BitStream;
+    BitStream.pBitStream->Write((uchar)property);
+    BitStream.pBitStream->WriteBit(isEnabled);
+    m_pPlayerManager->BroadcastOnlyJoined(CLuaPacket(SET_WORLD_SPECIAL_PROPERTY, *BitStream.pBitStream));
+    return true;
 }
 
 bool CStaticFunctionDefinitions::SetJetpackWeaponEnabled(eWeaponType weaponType, bool bEnabled)
@@ -11451,17 +11677,14 @@ bool CStaticFunctionDefinitions::KickPlayer(CPlayer* pPlayer, SString strRespons
     return true;
 }
 
-CBan* CStaticFunctionDefinitions::BanPlayer(CPlayer* pPlayer, bool bIP, bool bUsername, bool bSerial, CPlayer* pResponsible, SString strResponsible,
+CBan* CStaticFunctionDefinitions::BanPlayer(CPlayer* pTargetPlayer, bool bIP, bool bUsername, bool bSerial, CPlayer* pResponsible, SString strResponsible,
                                             SString strReason, time_t tUnban)
 {
     // Make sure we have a player
-    assert(pPlayer);
+    assert(pTargetPlayer);
 
     // Initialize variables
     CBan* pBan = NULL;
-
-    SString strMessage;
-    SString strInfoMessage;
 
     // If the responsible string is too long, crop it
     if (strResponsible.length() > MAX_BAN_RESPONSIBLE_LENGTH)
@@ -11474,21 +11697,11 @@ CBan* CStaticFunctionDefinitions::BanPlayer(CPlayer* pPlayer, bool bIP, bool bUs
         // If the reason is too long, crop it
         if (sizeReason > MAX_BAN_REASON_LENGTH)
             strReason = strReason.substr(0, MAX_BAN_REASON_LENGTH - 3) + "...";
-
-        // Format the messages for both the banned player and the console
-        strMessage.Format("%s (%s)", strResponsible.c_str(), strReason.c_str());
-        strInfoMessage.Format("%s was banned from the game by %s (%s)", pPlayer->GetNick(), strResponsible.c_str(), strReason.c_str());
-    }
-    else
-    {
-        // Format the messages for both the banned player and the console
-        strMessage.Format("%s", strResponsible.c_str());
-        strInfoMessage.Format("%s was banned from the game by %s", pPlayer->GetNick(), strResponsible.c_str());
     }
 
     // Ban the player
     if (bIP)
-        pBan = m_pBanManager->AddBan(pPlayer, strResponsible, strReason, tUnban);
+        pBan = m_pBanManager->AddBan(pTargetPlayer, strResponsible, strReason, tUnban);
     else if (bUsername || bSerial)
         pBan = m_pBanManager->AddBan(strResponsible, strReason, tUnban);
 
@@ -11497,11 +11710,11 @@ CBan* CStaticFunctionDefinitions::BanPlayer(CPlayer* pPlayer, bool bIP, bool bUs
     {
         // Set the data if banned by either username or serial
         if (bUsername)
-            pBan->SetAccount(pPlayer->GetSerialUser());
+            pBan->SetAccount(pTargetPlayer->GetSerialUser());
         if (bSerial)
-            pBan->SetSerial(pPlayer->GetSerial());
+            pBan->SetSerial(pTargetPlayer->GetSerial());
         if (bUsername || bSerial)
-            pBan->SetNick(pPlayer->GetNick());
+            pBan->SetNick(pTargetPlayer->GetNick());
 
         // Check if we passed a responsible player
         if (pResponsible)
@@ -11526,35 +11739,85 @@ CBan* CStaticFunctionDefinitions::BanPlayer(CPlayer* pPlayer, bool bIP, bool bUs
         if (pBan->IsBeingDeleted())
             return NULL;
 
-        // Call the event
-        CLuaArguments Arguments;
-        Arguments.PushBan(pBan);
+        SString strMessage;
+        SString strInfoMessage;
 
-        if (pResponsible)
-            Arguments.PushElement(pResponsible);
-
-        // A script can call kickPlayer in the onPlayerBan event, which would
-        // show him the 'kicked' message instead of our 'banned' message.
-        const bool bLeavingServer = pPlayer->IsLeavingServer();
-        pPlayer->SetLeavingServer(true);
-        pPlayer->CallEvent("onPlayerBan", Arguments);
-        pPlayer->SetLeavingServer(bLeavingServer);
-
-        // Check if script removed the ban
-        if (pBan->IsBeingDeleted())
-            return NULL;
-
-        // Tell the player that was banned why. QuitPlayer will delete the player.
-        if (!pPlayer->IsLeavingServer())
+        // Loop through players to see if we should kick anyone
+        list<CPlayer*>::const_iterator iter = m_pPlayerManager->IterBegin();
+        for (; iter != m_pPlayerManager->IterEnd(); iter++)
         {
-            time_t                    Duration = pBan->GetBanTimeRemaining();
-            CPlayerDisconnectedPacket Packet(CPlayerDisconnectedPacket::BAN, Duration, strMessage.c_str());
-            pPlayer->Send(Packet);
-            g_pGame->QuitPlayer(*pPlayer, CClient::QUIT_BAN, false, strReason.c_str(), strResponsible.c_str());
-        }
+            CPlayer* const pPlayer = *iter;
 
-        // Tell everyone else that he was banned from the game including console
-        CLogger::LogPrintf("BAN: %s\n", strInfoMessage.c_str());
+            // Default to not banning; if the IP, serial and username don't match, we don't want to kick the guy out
+            bool bBan = pPlayer == pTargetPlayer;
+
+            // Check if the player's IP matches the specified one, if specified
+            if (!bBan && bIP)
+            {
+                bBan = (pBan->GetIP() == pPlayer->GetSourceIP());
+            }
+
+            // Check if the player's username matches the specified one, if specified, and he wasn't banned over IP yet
+            if (!bBan && bUsername && pBan->GetAccount().length() > 0)
+            {
+                const std::string& strPlayerUsername = pPlayer->GetSerialUser();
+                bBan = stricmp(strPlayerUsername.c_str(), pBan->GetAccount().c_str()) == 0;
+            }
+
+            // Check if the player's serial matches the specified one, if specified, and he wasn't banned over IP or username yet
+            if (!bBan && bSerial)
+            {
+                const std::string& strPlayerSerial = pPlayer->GetSerial();
+                bBan = stricmp(strPlayerSerial.c_str(), pBan->GetSerial().c_str()) == 0;
+            }
+
+            // If either the IP, serial or username matched
+            if (bBan)
+            {
+                if (sizeReason >= MIN_BAN_REASON_LENGTH)
+                {
+                    // Format the messages for both the banned player and the console
+                    strMessage.Format("%s (%s)", strResponsible.c_str(), strReason.c_str());
+                    strInfoMessage.Format("%s was banned from the game by %s (%s)", pPlayer->GetNick(), strResponsible.c_str(), strReason.c_str());
+                }
+                else
+                {
+                    // Format the messages for both the banned player and the console
+                    strMessage.Format("%s", strResponsible.c_str());
+                    strInfoMessage.Format("%s was banned from the game by %s", pPlayer->GetNick(), strResponsible.c_str());
+                }
+
+                // Call the event
+                CLuaArguments Arguments;
+                Arguments.PushBan(pBan);
+
+                if (pResponsible)
+                    Arguments.PushElement(pResponsible);
+
+                // A script can call kickPlayer in the onPlayerBan event, which would
+                // show him the 'kicked' message instead of our 'banned' message.
+                const bool bLeavingServer = pPlayer->IsLeavingServer();
+                pPlayer->SetLeavingServer(true);
+                pPlayer->CallEvent("onPlayerBan", Arguments);
+                pPlayer->SetLeavingServer(bLeavingServer);
+
+                // Check if script removed the ban
+                if (pBan->IsBeingDeleted())
+                    return NULL;
+
+                // Tell the player that was banned why. QuitPlayer will delete the player.
+                if (!pPlayer->IsLeavingServer())
+                {
+                    time_t                    Duration = pBan->GetBanTimeRemaining();
+                    CPlayerDisconnectedPacket Packet(CPlayerDisconnectedPacket::BAN, Duration, strMessage.c_str());
+                    pPlayer->Send(Packet);
+                    g_pGame->QuitPlayer(**iter, CClient::QUIT_BAN, false, strReason.c_str(), strResponsible.c_str());
+                }
+
+                // Tell everyone else that he was banned from the game including console
+                CLogger::LogPrintf("BAN: %s\n", strInfoMessage.c_str());
+            }
+        }
 
         return pBan;
     }
@@ -11676,7 +11939,7 @@ CBan* CStaticFunctionDefinitions::AddBan(SString strIP, SString strUsername, SSt
             }
 
             // Check if the player's username matches the specified one, if specified, and he wasn't banned over IP yet
-            if (!bBan && bUsernameSpecified)
+            if (!bBan && bUsernameSpecified && strUsername.length() > 0)
             {
                 const std::string& strPlayerUsername = pPlayer->GetSerialUser();
                 bBan = stricmp(strPlayerUsername.c_str(), strUsername.c_str()) == 0;
@@ -11921,10 +12184,10 @@ bool CStaticFunctionDefinitions::ShowCursor(CElement* pElement, CLuaMain* pLuaMa
     return false;
 }
 
-bool CStaticFunctionDefinitions::ShowChat(CElement* pElement, bool bShow)
+bool CStaticFunctionDefinitions::ShowChat(CElement* pElement, bool bShow, bool bInputBlocked)
 {
     assert(pElement);
-    RUN_CHILDREN(ShowChat(*iter, bShow))
+    RUN_CHILDREN(ShowChat(*iter, bShow, bInputBlocked))
 
     if (IS_PLAYER(pElement))
     {
@@ -11933,6 +12196,7 @@ bool CStaticFunctionDefinitions::ShowChat(CElement* pElement, bool bShow)
         // Get him to show/hide the cursor
         CBitStream BitStream;
         BitStream.pBitStream->Write(static_cast<unsigned char>((bShow) ? 1 : 0));
+        BitStream.pBitStream->Write(static_cast<unsigned char>((bInputBlocked) ? 1 : 0));
         pPlayer->Send(CLuaPacket(SHOW_CHAT, *BitStream.pBitStream));
 
         return true;
@@ -12207,4 +12471,31 @@ const char* CStaticFunctionDefinitions::GetVersionBuildTag()
 CMtaVersion CStaticFunctionDefinitions::GetVersionSortable()
 {
     return SString("%d.%d.%d-%d.%05d.%d", MTASA_VERSION_MAJOR, MTASA_VERSION_MINOR, MTASA_VERSION_MAINTENANCE, MTASA_VERSION_TYPE, MTASA_VERSION_BUILD, 0);
+}
+
+bool CStaticFunctionDefinitions::SetColPolygonHeight(CColPolygon* pColPolygon, float fFloor, float fCeil)
+{
+    if (pColPolygon->SetHeight(fFloor, fCeil))
+    {
+        RefreshColShapeColliders(pColPolygon);
+
+        CBitStream BitStream;
+        BitStream.pBitStream->Write(fFloor);
+        BitStream.pBitStream->Write(fCeil);
+        m_pPlayerManager->BroadcastOnlyJoined(CElementRPCPacket(pColPolygon, SET_COLPOLYGON_HEIGHT, *BitStream.pBitStream));
+        return true;
+    }
+
+    return false;
+}
+
+bool CStaticFunctionDefinitions::SpawnVehicleFlyingComponent(CVehicle* const vehicle, std::uint8_t nodeIndex, std::uint8_t collisionType, std::int32_t removalTime)
+{
+    CBitStream bitStream;
+    bitStream.pBitStream->Write(nodeIndex);
+    bitStream.pBitStream->Write(collisionType);
+    bitStream.pBitStream->Write(removalTime);
+    m_pPlayerManager->BroadcastOnlyJoined(CElementRPCPacket(vehicle, SPAWN_VEHICLE_FLYING_COMPONENT, *bitStream.pBitStream));
+
+    return true;
 }

@@ -10,6 +10,9 @@
  *****************************************************************************/
 
 #include "StdInc.h"
+#include "CObject.h"
+#include "CLogger.h"
+#include "Utils.h"
 
 extern CGame* g_pGame;
 
@@ -30,6 +33,7 @@ CObject::CObject(CElement* pParent, CObjectManager* pObjectManager, bool bIsLowL
     m_bIsFrozen = false;
     m_bDoubleSided = false;
     m_bBreakable = false;
+    m_bRespawnable = true;
 
     m_bCollisionsEnabled = true;
 
@@ -55,6 +59,7 @@ CObject::CObject(const CObject& Copy) : CElement(Copy.m_pParent), m_bIsLowLod(Co
     m_bBreakable = Copy.m_bBreakable;
     m_vecPosition = Copy.m_vecPosition;
     m_vecRotation = Copy.m_vecRotation;
+    m_bRespawnable = Copy.m_bRespawnable;
 
     m_pMoveAnimation = NULL;
     if (Copy.m_pMoveAnimation != NULL)
@@ -180,6 +185,9 @@ bool CObject::ReadSpecialData(const int iLine)
         m_ucAlpha = static_cast<unsigned char>(iTemp);
 
     GetCustomDataBool("frozen", m_bIsFrozen, true);
+
+    if (!GetCustomDataBool("breakable", m_bBreakable, true))
+        m_bBreakable = CObjectManager::IsBreakableModel(m_usModel);
 
     return true;
 }

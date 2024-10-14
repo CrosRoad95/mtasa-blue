@@ -14,17 +14,31 @@
 #include <game/CBmx.h>
 #include "CBikeSA.h"
 
+enum class eBmxNodes
+{
+    NONE = 0,
+    CHASSIS,
+    FORKS_FRONT,
+    FORKS_REAR,
+    WHEEL_FRONT,
+    WHEEL_REAR,
+    HANDLEBARS,
+    CHAINSET,
+    PEDAL_R,
+    PEDAL_L,
+
+    NUM_NODES
+};
+
 class CBmxSAInterface : public CBikeSAInterface
 {
     // fill this
 };
 
-class CBmxSA : public virtual CBmx, public virtual CBikeSA
+class CBmxSA final : public virtual CBmx, public virtual CBikeSA
 {
-private:
 public:
-    CBmxSA(CBmxSAInterface* bmx);
-    CBmxSA(eVehicleTypes dwModelID, unsigned char ucVariation, unsigned char ucVariation2);
+    CBmxSA(CBmxSAInterface* pInterface);
 
-    virtual ~CBmxSA(){};
+    CBmxSAInterface* GetBmxInterface() { return reinterpret_cast<CBmxSAInterface*>(GetInterface()); }
 };

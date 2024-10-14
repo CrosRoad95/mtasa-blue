@@ -9,10 +9,36 @@
  *****************************************************************************/
 
 #include "StdInc.h"
+#include "CLuaUtilDefs.h"
+#include "CScriptArgReader.h"
+#include "Utils.h"
+#include <lua/CLuaFunctionParser.h>
+#include <SharedUtil.Memory.h>
+
+#ifndef MTA_CLIENT
+    #include "CRemoteCalls.h"
+#endif
+
+static auto GetProcessMemoryStats() -> std::optional<std::unordered_map<const char*, lua_Number>>
+{
+    ProcessMemoryStats memoryStats{};
+
+    if (TryGetProcessMemoryStats(memoryStats))
+    {
+        return std::unordered_map<const char*, lua_Number>{
+            {"virtual", memoryStats.virtualMemorySize},
+            {"resident", memoryStats.residentMemorySize},
+            {"shared", memoryStats.sharedMemorySize},
+            {"private", memoryStats.privateMemorySize},
+        };
+    }
+
+    return std::nullopt;
+}
 
 void CLuaUtilDefs::LoadFunctions()
 {
-    std::map<const char*, lua_CFunction> functions{
+    constexpr static const std::pair<const char*, lua_CFunction> functions[]{
         // Util functions to make scripting easier for the end user
         // Some of these are based on standard mIRC script funcs as a lot of people will be used to them
         {"deref", Dereference},
@@ -46,13 +72,12 @@ void CLuaUtilDefs::LoadFunctions()
         // Utility functions
         {"gettok", GetTok},
         {"tocolor", tocolor},
+        {"getProcessMemoryStats", ArgumentParser<GetProcessMemoryStats>},
     };
 
     // Add functions
-    for (const auto& pair : functions)
-    {
-        CLuaCFunctions::AddFunction(pair.first, pair.second);
-    }
+    for (const auto& [name, func] : functions)
+        CLuaCFunctions::AddFunction(name, func);
 }
 
 int CLuaUtilDefs::DisabledFunction(lua_State* luaVM)
@@ -474,7 +499,7 @@ int CLuaUtilDefs::fromJSON(lua_State* luaVM)
         {
             // Return it as data
             Converted.PushArguments(luaVM);
-            return Converted.Count();
+            return static_cast<int>(Converted.Count());
         }
     }
     else
@@ -529,7 +554,7 @@ int CLuaUtilDefs::PregReplace(lua_State* luaVM)
     {
         pcrecpp::RE pPattern(strPattern, pOptions);
 
-        string strNew = strBase;
+        std::string strNew = strBase;
         if (pPattern.GlobalReplace(strReplace, &strNew))
         {
             lua_pushstring(luaVM, strNew.c_str());
@@ -564,8 +589,8 @@ int CLuaUtilDefs::PregMatch(lua_State* luaVM)
 
         pcrecpp::StringPiece strInput(strBase);
 
-        string strGet;
-        int    i = 1;
+        std::string strGet;
+        int         i = 1;
         while (pPattern.FindAndConsume(&strInput, &strGet) && i <= iMaxResults)
         {
             lua_pushnumber(luaVM, i);
@@ -636,7 +661,7 @@ int CLuaUtilDefs::GetTok(lua_State* luaVM)
     if (argStream.NextIsNumber())
     {
         argStream.ReadNumber(uiDelimiter);
-        wchar_t wUNICODE[2] = { static_cast<wchar_t>(uiDelimiter), '\0' };
+        wchar_t wUNICODE[2] = {static_cast<wchar_t>(uiDelimiter), '\0'};
         strDelimiter = UTF16ToMbUTF8(wUNICODE);
     }
     else            // It's already a string

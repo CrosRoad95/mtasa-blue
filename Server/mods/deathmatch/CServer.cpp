@@ -10,6 +10,9 @@
  *****************************************************************************/
 
 #include "StdInc.h"
+#include "CServer.h"
+#include "CGame.h"
+#include "CMainConfig.h"
 #define ALLOC_STATS_MODULE_NAME "deathmatch"
 #include "SharedUtil.hpp"
 #include "SharedUtil.Thread.h"
@@ -91,6 +94,11 @@ void CServer::DoPulse()
         UNCLOCK(" Top", "Game->DoPulse");
     }
     CLOCK(" Top", " Idle");
+}
+
+bool CServer::IsReadyToAcceptConnections() const noexcept
+{
+    return (m_pGame != nullptr) && m_pGame->IsServerFullyUp();
 }
 
 bool CServer::IsFinished()

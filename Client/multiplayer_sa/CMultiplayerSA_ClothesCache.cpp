@@ -26,7 +26,8 @@
 class CPedClothesDesc
 {
 public:
-    union {
+    union
+    {
         DWORD things1[10];            // models
         struct
         {
@@ -42,7 +43,8 @@ public:
         };
     };
 
-    union {
+    union
+    {
         DWORD things2[18];            // +0x28 textures?
         struct
         {
@@ -410,5 +412,5 @@ void CMultiplayerSA::GetClothesCacheStats(SClothesCacheStats& outStats)
 void CMultiplayerSA::InitHooks_ClothesCache()
 {
     EZHookInstall(CClothesBuilderCreateSkinnedClump);
-    InitRwFunctions(pGameInterface->GetGameVersion());
+    InitRwFunctions();
 }

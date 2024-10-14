@@ -14,7 +14,7 @@
 
 #include "config.h"
 
-#if defined(_MSC_VER)
+#if defined(CRYPTOPP_MSC_VERSION)
 # include <intrin.h>
 # pragma intrinsic(_umul128)
 # pragma intrinsic(__shiftright128)
@@ -52,7 +52,7 @@ using CryptoPP::word128;
 # define shr128(out,in,shift) out = (word64)(in >> (shift));
 # define shl128(out,in,shift) out = (word64)((in << shift) >> 64);
 
-#elif defined(_MSC_VER)
+#elif defined(CRYPTOPP_MSC_VERSION)
 struct word128 { word64 lo, hi; };
 # define mul64x64_128(out,a,b) out.lo = _umul128(a,b,&out.hi);
 # define shr128_pair(out,hi,lo,shift) out = __shiftright128(lo, hi, shift);
@@ -64,7 +64,7 @@ struct word128 { word64 lo, hi; };
 # define lo128(a) (a.lo)
 # define hi128(a) (a.hi)
 
-#elif defined(__GNUC__)
+#elif defined(__GNUC__) && (defined(__amd64__) || defined(__x86_64__))
 struct word128 { word64 lo, hi; };
 # define mul64x64_128(out,a,b) __asm__ ("mulq %3" : "=a" (out.lo), "=d" (out.hi) : "a" (a), "rm" (b));
 # define shr128_pair(out,hi,lo,shift) __asm__ ("shrdq %2,%1,%0" : "+r" (lo) : "r" (hi), "J" (shift)); out = lo;

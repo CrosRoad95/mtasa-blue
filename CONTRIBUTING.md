@@ -1,7 +1,1 @@
-Our project's code repository can be found on the [multitheftauto/mtasa-blue](https://github.com/multitheftauto/mtasa-blue/) Git repository at [GitHub](https://github.com/). We are always looking for new developers, so if you're interested, here are some useful links:
-
-* [Nightly Builds](https://nightly.mtasa.com/)
-* [Issue Tracker](https://github.com/multitheftauto/mtasa-blue/issues)
-* [Wiki Roadmap](https://wiki.mtasa.com/wiki/Roadmap)
-
-Before committing, please review the [coding guidelines](https://wiki.mtasa.com/index.php?title=Coding_guidelines).
+This information is now available at [mtasa-docs (mtasa-blue CONTRIBUTING.md)](https://github.com/multitheftauto/mtasa-docs/blob/main/mtasa-blue/CONTRIBUTING.md).

@@ -61,14 +61,18 @@ public:
     void SetSize(float fSize);
     void SetColor(const SColor color);
 
-    void AttachTo(CElement* pElement);
-    void SetAttachedOffsets(CVector& vecPosition, CVector& vecRotation);
-
     void SetIcon(unsigned char ucIcon);
 
     CColShape* GetColShape() { return m_pCollision; }
 
     virtual CSphere GetWorldBoundingSphere();
+
+    void SetIgnoreAlphaLimits(bool ignore) noexcept { m_ignoreAlphaLimits = ignore; };
+    bool AreAlphaLimitsIgnored() const noexcept { return m_ignoreAlphaLimits; };
+
+    SColor GetTargetArrowColor() const noexcept { return m_TargetArrowColor; };
+    float  GetTargetArrowSize() const noexcept { return m_TargetArrowSize; };
+    void SetTargetArrowProperties(const SColor color, float size) noexcept;
 
 protected:
     bool ReadSpecialData(const int iLine) override;
@@ -88,6 +92,9 @@ private:
     float                 m_fSize;
     SColor                m_Color;
     unsigned char         m_ucIcon;
+    bool                  m_ignoreAlphaLimits;
+    SColor                m_TargetArrowColor;
+    float                 m_TargetArrowSize;
 
     CColShape* m_pCollision;
 };

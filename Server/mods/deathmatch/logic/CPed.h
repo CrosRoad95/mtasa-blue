@@ -168,6 +168,7 @@ public:
     void           SetWeaponAmmoInClip(unsigned short uscAmmoInClip, unsigned char ucSlot = 0xFF);
     unsigned short GetWeaponTotalAmmo(unsigned char ucSlot = 0xFF);
     void           SetWeaponTotalAmmo(unsigned short usTotalAmmo, unsigned char ucSlot = 0xFF);
+    bool           HasWeaponType(unsigned char ucWeaponType);
 
     float GetMaxHealth();
     float GetHealth() { return m_fHealth; }
@@ -187,7 +188,7 @@ public:
     static const char* GetBodyPartName(unsigned char ucID);
 
     bool HasJetPack() { return m_bHasJetPack; }
-    void SetHasJetPack(bool bHasJetPack) { m_bHasJetPack = bHasJetPack; }
+    void SetHasJetPack(bool bHasJetPack);
 
     bool IsInWater() { return m_bInWater; }
     void SetInWater(bool bInWater) { m_bInWater = bInWater; }
@@ -225,7 +226,7 @@ public:
     unsigned char GetFightingStyle() { return m_ucFightingStyle; }
     void          SetFightingStyle(unsigned char ucStyle) { m_ucFightingStyle = ucStyle; }
 
-    unsigned char GetMoveAnim() { return m_iMoveAnim; }
+    unsigned char GetMoveAnim() { return static_cast<unsigned char>(m_iMoveAnim); }
     void          SetMoveAnim(int iMoveAnim) { m_iMoveAnim = iMoveAnim; }
 
     float GetGravity() { return m_fGravity; }
@@ -259,11 +260,23 @@ public:
     void     SetSyncable(bool bSynced) { m_bSyncable = bSynced; };
     CPlayer* m_pSyncer;
 
+    CVehicle* GetJackingVehicle() { return m_pJackingVehicle; }
+    void      SetJackingVehicle(CVehicle* pVehicle);
+
     bool IsStealthAiming() { return m_bStealthAiming; }
     void SetStealthAiming(bool bAiming) { m_bStealthAiming = bAiming; }
 
     bool GetCollisionEnabled() { return m_bCollisionsEnabled; }
     void SetCollisionEnabled(bool bCollisionEnabled) { m_bCollisionsEnabled = bCollisionEnabled; }
+
+    long long GetLastFarSyncTick() { return m_llLastFarSyncTick; }
+    void      SetLastFarSyncTick(long long llLastSyncTick) { m_llLastFarSyncTick = llLastSyncTick; }
+
+    void                                  ClearNearPlayersList() { m_nearPlayersList.clear(); }
+    void                                  AddPlayerToNearList(CPlayer* pPlayer) { m_nearPlayersList.push_back(pPlayer); }
+    bool                                  IsNearPlayersListEmpty() { return m_nearPlayersList.empty(); }
+    std::vector<CPlayer*>::const_iterator NearPlayersIterBegin() { return m_nearPlayersList.begin(); }
+    std::vector<CPlayer*>::const_iterator NearPlayersIterEnd() { return m_nearPlayersList.end(); }
 
 protected:
     bool ReadSpecialData(const int iLine) override;
@@ -302,6 +315,7 @@ protected:
     bool                                 m_bHeadless;
     bool                                 m_bFrozen;
     bool                                 m_bStealthAiming;
+    CVehicle*                            m_pJackingVehicle;
 
     CVehicle*    m_pVehicle;
     unsigned int m_uiVehicleSeat;
@@ -309,6 +323,9 @@ protected:
 
     bool m_bSyncable;
     bool m_bCollisionsEnabled;
+
+    long long             m_llLastFarSyncTick = 0;
+    std::vector<CPlayer*> m_nearPlayersList;
 
 private:
     CPedManager* m_pPedManager;

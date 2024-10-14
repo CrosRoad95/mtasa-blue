@@ -15,6 +15,7 @@ class CClientVehicle;
 
 #include <game/CPlane.h>
 #include <game/CVehicle.h>
+#include <game/CModelInfo.h>
 
 #include "CClientCommon.h"
 #include "CClientCamera.h"
@@ -23,10 +24,15 @@ class CClientVehicle;
 #include "CClientStreamElement.h"
 #include "CClientVehicleManager.h"
 #include "CVehicleUpgrades.h"
+#include "CClientModel.h"
+
+class CBikeHandlingEntry;
+class CBoatHandlingEntry;
+class CClientProjectile;
 
 #define INVALID_PASSENGER_SEAT 0xFF
 #define DEFAULT_VEHICLE_HEALTH 1000
-#define MAX_VEHICLE_HEALTH 10000
+#define MAX_VEHICLE_HEALTH     10000
 
 enum eClientVehicleType
 {
@@ -42,6 +48,8 @@ enum eClientVehicleType
     CLIENTVEHICLE_BMX,
     CLIENTVEHICLE_TRAILER
 };
+
+static constexpr int NUM_VEHICLE_TYPES = 11; 
 
 enum eDelayedSyncVehicleData
 {
@@ -61,6 +69,21 @@ enum eWindow
     WINDOW_LEFT_BACK,
     WINDOW_WINDSHIELD,
     MAX_WINDOWS
+};
+
+enum class VehicleBlowState : unsigned char
+{
+    INTACT,
+    AWAITING_EXPLOSION_SYNC,
+    BLOWN,
+};
+
+struct VehicleBlowFlags
+{
+    bool withMovement : 1;
+    bool withExplosion : 1;
+
+    constexpr VehicleBlowFlags() : withMovement(true), withExplosion(true) {}
 };
 
 namespace EComponentBase
@@ -123,7 +146,8 @@ struct SVehicleComponentData
     bool    m_bScaleChanged;
     bool    m_bVisible;
 };
-class CClientProjectile;
+
+static std::array<std::string, NUM_VEHICLE_TYPES> g_vehicleTypePrefixes;
 
 class CClientVehicle : public CClientStreamElement
 {
@@ -167,7 +191,6 @@ public:
     virtual CSphere GetWorldBoundingSphere();
 
     void GetMoveSpeed(CVector& vecMoveSpeed) const;
-    void GetMoveSpeedMeters(CVector& vecMoveSpeed) const;
     void SetMoveSpeed(const CVector& vecMoveSpeed);
     void GetTurnSpeed(CVector& vecTurnSpeed) const;
     void SetTurnSpeed(const CVector& vecTurnSpeed);
@@ -194,10 +217,13 @@ public:
     void SetDoorsUndamageable(bool bUndamageable);
 
     float GetHealth() const;
-    void  SetHealth(float fHealth);
+    void  SetHealth(float health);
     void  Fix();
-    void  Blow(bool bAllowMovement = false);
-    bool  IsVehicleBlown() { return m_bBlown; };
+
+    void             Blow(VehicleBlowFlags blow);
+    bool             IsBlown() const noexcept { return m_blowState != VehicleBlowState::INTACT; }
+    void             SetBlowState(VehicleBlowState state) { m_blowState = state; }
+    VehicleBlowState GetBlowState() const noexcept { return m_blowState; }
 
     CVehicleColor& GetColor();
     void           SetColor(const CVehicleColor& color);
@@ -234,7 +260,6 @@ public:
     bool IsDrowning() const;
     bool IsDriven() const;
     bool IsUpsideDown() const;
-    bool IsBlown() const;
 
     bool IsSirenOrAlarmActive();
     void SetSirenOrAlarmActive(bool bActive);
@@ -258,8 +283,10 @@ public:
     unsigned char GetDoorStatus(unsigned char ucDoor);
     unsigned char GetWheelStatus(unsigned char ucWheel);
     bool          IsWheelCollided(unsigned char ucWheel);
+    int           GetWheelFrictionState(unsigned char ucWheel);
     unsigned char GetPanelStatus(unsigned char ucPanel);
     unsigned char GetLightStatus(unsigned char ucLight);
+    SString GetComponentNameForWheel(unsigned char ucWheel) const noexcept;
 
     bool AreLightsOn();
 
@@ -271,8 +298,13 @@ public:
 
     // TODO: Make the class remember on virtualization
     float GetHeliRotorSpeed();
-    void  SetHeliRotorSpeed(float fSpeed);
+    float GetPlaneRotorSpeed();
 
+    bool GetRotorSpeed(float&);
+    bool SetRotorSpeed(float);
+    bool SetWheelsRotation(float fRot1, float fRot2, float fRot3, float fRot4) noexcept;
+    void SetHeliRotorSpeed(float fSpeed);
+    void SetPlaneRotorSpeed(float fSpeed);
     bool IsHeliSearchLightVisible();
     void SetHeliSearchLightVisible(bool bVisible);
 
@@ -298,9 +330,7 @@ public:
 
     void FuckCarCompletely(bool bKeepWheels);
 
-    unsigned long GetMemoryValue(unsigned long ulOffset);
-    unsigned long GetGameBaseAddress();
-    void          WorldIgnore(bool bWorldIgnore);
+    void WorldIgnore(bool bWorldIgnore);
 
     bool IsVirtual() { return m_pVehicle == NULL; };
 
@@ -457,7 +487,16 @@ public:
 
     void                  ApplyHandling();
     CHandlingEntry*       GetHandlingData();
-    const CHandlingEntry* GetOriginalHandlingData() { return m_pOriginalHandlingEntry; }
+    const CHandlingEntry* GetOriginalHandlingData() { return m_pOriginalHandlingEntry; };
+
+    CFlyingHandlingEntry*       GetFlyingHandlingData();
+    const CFlyingHandlingEntry* GetOriginalFlyingHandlingData() { return m_pOriginalFlyingHandlingEntry; };
+
+    CBoatHandlingEntry*       GetBoatHandlingData();
+    const CBoatHandlingEntry* GetOriginalBoatHandlingData() { return m_pOriginalBoatHandlingEntry; };
+
+    CBikeHandlingEntry*       GetBikeHandlingData();
+    const CBikeHandlingEntry* GetOriginalBikeHandlingData() { return m_pOriginalBikeHandlingEntry; };
 
     uint GetTimeSinceLastPush() { return (uint)(CTickCount::Now() - m_LastPushedTime).ToLongLong(); }
     void ResetLastPushTime() { m_LastPushedTime = CTickCount::Now(); }
@@ -494,7 +533,19 @@ public:
 
     void SetHeliBladeCollisionsEnabled(bool bEnable) { m_bEnableHeliBladeCollisions = bEnable; }
 
+    float GetWheelScale();
+    void  SetWheelScale(float fWheelScale);
+    void  ResetWheelScale();
+
     bool OnVehicleFallThroughMap();
+
+    bool GetDummyPosition(eVehicleDummies dummy, CVector& position) const;
+    bool SetDummyPosition(eVehicleDummies dummy, const CVector& position);
+    bool ResetDummyPositions();
+
+    bool SpawnFlyingComponent(const eCarNodes& nodeID, const eCarComponentCollisionTypes& collisionType, std::int32_t removalTime);
+
+    CVector GetEntryPoint(std::uint32_t entryPointIndex);
 
 protected:
     void ConvertComponentRotationBase(const SString& vehicleComponent, CVector& vecInOutRotation, EComponentBaseType inputBase, EComponentBaseType outputBase);
@@ -534,10 +585,6 @@ protected:
     CClientVehiclePtr            m_pPreviousLink;
     CClientVehiclePtr            m_pNextLink;
     CMatrix                      m_Matrix;
-    CMatrix                      m_MatrixLast;
-    CMatrix                      m_MatrixPure;
-    CVector                      m_vecMoveSpeedInterpolate;
-    CVector                      m_vecMoveSpeedMeters;
     CVector                      m_vecMoveSpeed;
     CVector                      m_vecTurnSpeed;
     float                        m_fHealth;
@@ -600,14 +647,22 @@ protected:
     unsigned char                          m_ucAlpha;
     bool                                   m_bAlphaChanged;
     double                                 m_dLastRotationTime;
-    bool                                   m_bBlowNextFrame;
+    bool                                   m_blowAfterStreamIn;
     bool                                   m_bIsOnGround;
     bool                                   m_bHeliSearchLightVisible;
     float                                  m_fHeliRotorSpeed;
-    const CHandlingEntry*                  m_pOriginalHandlingEntry;
-    CHandlingEntry*                        m_pHandlingEntry;
+    float                                  m_fPlaneRotorSpeed;
+    const CHandlingEntry*                  m_pOriginalHandlingEntry = nullptr;
+    CHandlingEntry*                        m_pHandlingEntry = nullptr;
+    const CFlyingHandlingEntry*            m_pOriginalFlyingHandlingEntry = nullptr;
+    CFlyingHandlingEntry*                  m_pFlyingHandlingEntry = nullptr;
+    const CBoatHandlingEntry*              m_pOriginalBoatHandlingEntry = nullptr;
+    CBoatHandlingEntry*                    m_pBoatHandlingEntry = nullptr;
+    const CBikeHandlingEntry*              m_pOriginalBikeHandlingEntry = nullptr;
+    CBikeHandlingEntry*                    m_pBikeHandlingEntry = nullptr;
     float                                  m_fNitroLevel;
     char                                   m_cNitroCount;
+    float                                  m_fWheelScale;
 
     bool  m_bChainEngine;
     bool  m_bIsDerailed;
@@ -617,6 +672,7 @@ protected:
     float m_fTrainPosition;
     uchar m_ucTrackID;
     bool  m_bJustStreamedIn;
+    bool  m_bWheelScaleChanged;
 
     // Time dependent error compensation interpolation
     struct
@@ -648,8 +704,9 @@ protected:
 
     unsigned long m_ulIllegalTowBreakTime;
 
-    bool m_bBlown;
     bool m_bHasDamageModel;
+
+    VehicleBlowState m_blowState = VehicleBlowState::INTACT;
 
     bool                          m_bTaxiLightOn;
     std::list<CClientProjectile*> m_Projectiles;
@@ -673,6 +730,7 @@ protected:
     CMatrix                        m_matCreate;
     unsigned char                  m_ucFellThroughMapCount;
     SFixedArray<bool, MAX_WINDOWS> m_bWindowOpen;
+    std::shared_ptr<CClientModel>  m_clientModel;
 
 public:
 #ifdef MTA_DEBUG
@@ -684,4 +742,7 @@ public:
     SSirenInfo                               m_tSirenBeaconInfo;
     std::map<SString, SVehicleComponentData> m_ComponentData;
     bool                                     m_bAsyncLoadingDisabled;
+
+    std::array<CVector, VEHICLE_DUMMY_COUNT> m_dummyPositions;
+    bool                                     m_copyDummyPositions = true;
 };

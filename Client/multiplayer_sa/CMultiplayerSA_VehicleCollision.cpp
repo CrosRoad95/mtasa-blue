@@ -1,12 +1,12 @@
 /*****************************************************************************
-*
-*  PROJECT:     Multi Theft Auto
-*  LICENSE:     See LICENSE in the top level directory
-*  FILE:        multiplayer_sa/CMultiplayerSA_VehicleCollision.cpp
-*
-*  Multi Theft Auto is available from https://www.multitheftauto.com/
-*
-*****************************************************************************/
+ *
+ *  PROJECT:     Multi Theft Auto
+ *  LICENSE:     See LICENSE in the top level directory
+ *  FILE:        multiplayer_sa/CMultiplayerSA_VehicleCollision.cpp
+ *
+ *  Multi Theft Auto is available from https://www.multitheftauto.com/
+ *
+ *****************************************************************************/
 #include "StdInc.h"
 
 extern CCoreInterface* g_pCore;
@@ -35,14 +35,13 @@ void TriggerVehicleCollisionEvent()
         auto pInterface = static_cast<CVehicleSAInterface*>(pEntity);
 
         pVehicleCollisionHandler(pCollisionVehicle, pEntity, pEntity->m_nModelIndex, pCollisionVehicle->m_fDamageImpulseMagnitude,
-            pInterface->m_fDamageImpulseMagnitude, pCollisionVehicle->m_usPieceType,
-            pCollisionVehicle->m_vecCollisionPosition, pCollisionVehicle->m_vecCollisionImpactVelocity);
+                                 pInterface->m_fDamageImpulseMagnitude, pCollisionVehicle->m_usPieceType, pCollisionVehicle->m_vecCollisionPosition,
+                                 pCollisionVehicle->m_vecCollisionImpactVelocity, false);
     }
     else
     {
         pVehicleCollisionHandler(pCollisionVehicle, pEntity, pEntity->m_nModelIndex, pCollisionVehicle->m_fDamageImpulseMagnitude, 0.0f,
-            pCollisionVehicle->m_usPieceType, pCollisionVehicle->m_vecCollisionPosition,
-            pCollisionVehicle->m_vecCollisionImpactVelocity);
+                                 pCollisionVehicle->m_usPieceType, pCollisionVehicle->m_vecCollisionPosition, pCollisionVehicle->m_vecCollisionImpactVelocity, pEntity->nType == ENTITY_TYPE_OBJECT && pEntity->vtbl == (CEntitySAInterfaceVTBL*)0x867030);
     }
     TIMING_CHECKPOINT("-TriggerVehColEvent");
 }

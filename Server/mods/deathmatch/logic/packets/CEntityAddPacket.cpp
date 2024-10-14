@@ -10,6 +10,22 @@
  *****************************************************************************/
 
 #include "StdInc.h"
+#include "CEntityAddPacket.h"
+#include "CColShape.h"
+#include "CColCuboid.h"
+#include "CColCircle.h"
+#include "CColPolygon.h"
+#include "CColRectangle.h"
+#include "CColTube.h"
+#include "CDummy.h"
+#include "CPickup.h"
+#include "CMarker.h"
+#include "CBlip.h"
+#include "CRadarArea.h"
+#include "CWater.h"
+#include "CVehicleManager.h"
+#include "CHandlingManager.h"
+#include "CGame.h"
 
 //
 // Temporary helper functions for fixing crashes on pre r6459 clients.
@@ -154,11 +170,10 @@ bool CEntityAddPacket::Write(NetBitStreamInterface& BitStream) const
                 BitStream.WriteBit(pElement->IsCallPropagationEnabled());
 
             // Write custom data
-            CCustomData* pCustomData = pElement->GetCustomDataPointer();
-            assert(pCustomData);
-            BitStream.WriteCompressed(pCustomData->CountOnlySynchronized());
-            map<string, SCustomData>::const_iterator iter = pCustomData->SyncedIterBegin();
-            for (; iter != pCustomData->SyncedIterEnd(); ++iter)
+            CCustomData& pCustomData = pElement->GetCustomDataManager();
+            BitStream.WriteCompressed(pCustomData.CountOnlySynchronized());
+            map<string, SCustomData>::const_iterator iter = pCustomData.SyncedIterBegin();
+            for (; iter != pCustomData.SyncedIterEnd(); ++iter)
             {
                 const char*         szName = iter->first.c_str();
                 const CLuaArgument* pArgument = &iter->second.Variable;
@@ -225,8 +240,12 @@ bool CEntityAddPacket::Write(NetBitStreamInterface& BitStream) const
                     bool bIsDoubleSided = pObject->IsDoubleSided();
                     BitStream.WriteBit(bIsDoubleSided);
 
+                    // Breakable
+                    if (BitStream.Can(eBitStreamVersion::CEntityAddPacket_ObjectBreakable))
+                        BitStream.WriteBit(pObject->IsBreakable());
+
                     // Visible in all dimensions
-                    if (BitStream.Version() >= 0x068)
+                    if (BitStream.Can(eBitStreamVersion::DimensionOmnipresence))
                     {
                         bool bIsVisibleInAllDimensions = pObject->IsVisibleInAllDimensions();
                         BitStream.WriteBit(bIsVisibleInAllDimensions);
@@ -277,6 +296,14 @@ bool CEntityAddPacket::Write(NetBitStreamInterface& BitStream) const
                     SObjectHealthSync health;
                     health.data.fValue = pObject->GetHealth();
                     BitStream.Write(&health);
+
+                    // is object break?
+                    if (BitStream.Can(eBitStreamVersion::BreakObject_Serverside))
+                        BitStream.WriteBit(pObject->GetHealth() <= 0);
+
+                    // Respawnable
+                    if (BitStream.Can(eBitStreamVersion::RespawnObject_Serverside))
+                        BitStream.WriteBit(pObject->IsRespawnEnabled());
 
                     if (ucEntityTypeID == CElement::WEAPON)
                     {
@@ -439,6 +466,24 @@ bool CEntityAddPacket::Write(NetBitStreamInterface& BitStream) const
                     SVehicleHealthSync health;
                     health.data.fValue = pVehicle->GetHealth();
                     BitStream.Write(&health);
+
+                    // Blow state
+                    if (BitStream.Can(eBitStreamVersion::VehicleBlowStateSupport))
+                    {
+                        unsigned char blowState = 0;
+
+                        switch (pVehicle->GetBlowState())
+                        {
+                            case VehicleBlowState::AWAITING_EXPLOSION_SYNC:
+                                blowState = 1;
+                                break;
+                            case VehicleBlowState::BLOWN:
+                                blowState = 2;
+                                break;
+                        }
+
+                        BitStream.WriteBits(&blowState, 2);
+                    }
 
                     // Color
                     CVehicleColor& vehColor = pVehicle->GetColor();
@@ -687,10 +732,25 @@ bool CEntityAddPacket::Write(NetBitStreamInterface& BitStream) const
 
                             position.data.vecPosition = pMarker->GetTarget();
                             BitStream.Write(&position);
+
+                            if (markerType.data.ucType == CMarker::TYPE_CHECKPOINT && BitStream.Can(eBitStreamVersion::SetMarkerTargetArrowProperties))
+                            {
+                                SColor color = pMarker->GetTargetArrowColor();
+
+                                BitStream.Write(color.R);
+                                BitStream.Write(color.G);
+                                BitStream.Write(color.B);
+                                BitStream.Write(color.A);
+                                BitStream.Write(pMarker->GetTargetArrowSize());
+                            }
                         }
                         else
                             BitStream.WriteBit(false);
                     }
+
+                    // Alpha limit
+                    if (BitStream.Can(eBitStreamVersion::Marker_IgnoreAlphaLimits))
+                        BitStream.WriteBit(pMarker->AreAlphaLimitsIgnored());
 
                     break;
                 }
@@ -713,17 +773,15 @@ bool CEntityAddPacket::Write(NetBitStreamInterface& BitStream) const
                     // Write the icon
                     SIntegerSync<unsigned char, 6> icon(pBlip->m_ucIcon);
                     BitStream.Write(&icon);
-                    if (pBlip->m_ucIcon == 0)
-                    {
-                        // Write the size
-                        SIntegerSync<unsigned char, 5> size(pBlip->m_ucSize);
-                        BitStream.Write(&size);
 
-                        // Write the color
-                        SColorSync color;
-                        color = pBlip->GetColor();
-                        BitStream.Write(&color);
-                    }
+                    // Write the size
+                    SIntegerSync<unsigned char, 5> size(pBlip->m_ucSize);
+                    BitStream.Write(&size);
+
+                    // Write the color
+                    SColorSync color;
+                    color = pBlip->GetColor();
+                    BitStream.Write(&color);
 
                     break;
                 }
@@ -1025,6 +1083,15 @@ bool CEntityAddPacket::Write(NetBitStreamInterface& BitStream) const
                                 vertex.data.vecPosition = *iter;
                                 BitStream.Write(&vertex);
                             }
+
+                            if (BitStream.Can(eBitStreamVersion::SetColPolygonHeight))
+                            {
+                                float fFloor, fCeil;
+                                pPolygon->GetHeight(fFloor, fCeil);
+
+                                BitStream.Write(fFloor);
+                                BitStream.Write(fCeil);
+                            }
                             break;
                         }
                         default:
@@ -1046,7 +1113,7 @@ bool CEntityAddPacket::Write(NetBitStreamInterface& BitStream) const
                         BitStream.Write((short)vecVertex.fY);
                         BitStream.Write(vecVertex.fZ);
                     }
-                    if (BitStream.Version() >= 0x06C)
+                    if (BitStream.Can(eBitStreamVersion::Water_bShallow_ServerSide))
                         BitStream.WriteBit(pWater->IsWaterShallow());
                     break;
                 }

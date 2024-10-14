@@ -1,11 +1,11 @@
 /*****************************************************************************
  *
- *  PROJECT:     Multi Theft Auto v1.0
+ *  PROJECT:     Multi Theft Auto
  *  LICENSE:     See LICENSE in the top level directory
- *  FILE:        game_sa/CAnimManagerSA.h
+ *  FILE:        Client/game_sa/CAnimManagerSA.h
  *  PURPOSE:     Header file for animation manager class
  *
- *  Multi Theft Auto is available from http://www.multitheftauto.com/
+ *  Multi Theft Auto is available from https://multitheftauto.com/
  *
  *****************************************************************************/
 
@@ -16,10 +16,6 @@
 #include <game/CAnimBlendHierarchy.h>
 #include <game/CAnimBlock.h>
 #include <game/CAnimBlendAssocGroup.h>
-
-#include "Common.h"
-#include <list>
-#include <map>
 
 #define FUNC_CAnimManager_Initialize                        0x5bf6b0
 #define FUNC_CAnimManager_Shutdown                          0x4d4130
@@ -64,6 +60,7 @@
 #define VAR_CAnimManager_NumAnimAssocDefinitions            0xb4ea28
 #define VAR_CAnimManager_NumAnimations                      0xb4ea2c
 #define VAR_CAnimManager_NumAnimBlocks                      0xb4ea30
+
 // Non members
 #define FUNC_HasAnimGroupLoaded                             0x45b130
 #define FUNC_RpAnimBlendClumpGetFirstAssociation            0x4d15e0
@@ -72,11 +69,6 @@
 #define FUNC_RpAnimBlendGetNextAssociation                  0x4d6ab0
 #define FUNC_RpAnimBlendClumpGetNumAssociations             0x4d6b60
 #define FUNC_RpAnimBlendClumpUpdateAnimations               0x4d34f0
-
-class CAnimManagerSAInterface
-{
-public:
-};
 
 class CAnimManagerSA : public CAnimManager
 {
@@ -102,14 +94,14 @@ public:
     int                         GetAnimationBlockIndex(const char* szName);
     int                         RegisterAnimBlock(const char* szName);
 
-    std::unique_ptr<CAnimBlendAssocGroup> GetAnimBlendAssoc(AssocGroupId groupID);
+    std::unique_ptr<CAnimBlendAssocGroup> GetAnimBlendAssoc(AssocGroupId groupID) const;
     AssocGroupId                          GetFirstAssocGroup(const char* szName);
 
     const char* GetAnimGroupName(AssocGroupId groupID);
     const char* GetAnimBlockName(AssocGroupId groupID);
 
     std::unique_ptr<CAnimBlendAssociation> CreateAnimAssociation(AssocGroupId animGroup, AnimationId animID);
-    StaticAssocIntface_type                GetAnimStaticAssociation(AssocGroupId animGroup, AnimationId animID);
+    StaticAssocIntface_type                GetAnimStaticAssociation(eAnimGroup animGroup, eAnimID animID) const;
     std::unique_ptr<CAnimBlendAssociation> GetAnimAssociation(AssocGroupId animGroup, const char* szAnimName);
     std::unique_ptr<CAnimBlendAssociation> AddAnimation(RpClump* pClump, AssocGroupId animGroup, AnimationId animID);
     std::unique_ptr<CAnimBlendAssociation> AddAnimation(RpClump* pClump, CAnimBlendHierarchy*, int ID);
@@ -167,20 +159,13 @@ public:
     void DeleteCustomAnimHierarchyInterface(CAnimBlendHierarchySAInterface* pInterface);
     void DeleteCustomAnimSequenceInterface(CAnimBlendSequenceSAInterface* pInterface);
 
-    bool           isGateWayAnimationHierarchy(CAnimBlendHierarchySAInterface* pInterface);
-    const SString& GetGateWayBlockName() { return m_kGateWayBlockName; };
-    const SString& GetGateWayAnimationName() { return m_kGateWayAnimationName; };
+    bool        isGateWayAnimationHierarchy(CAnimBlendHierarchySAInterface* pInterface);
+    const char* GetGateWayBlockName() const;
+    const char* GetGateWayAnimationName() const;
 
+    bool IsValidGroup(std::uint32_t uiAnimGroup) const;
+    bool IsValidAnim(std::uint32_t uiAnimGroup, std::uint32_t uiAnimID) const;
 private:
     CAnimBlendAssocGroup* m_pAnimAssocGroups[MAX_ANIM_GROUPS];
     CAnimBlock*           m_pAnimBlocks[MAX_ANIM_BLOCKS];
-
-    // This "gateway" animation will allow us to play custom animations by simply playing this animation
-    // and then in AddAnimation and AddAnimationAndSync hook, we can return our custom animation in the
-    // hook instead of run_wuzi. This will trick GTA SA into thinking that it is playing run_wuzi from
-    // ped block, but in reality, it's playing our custom animation, and Of course, we can return run_wuzi
-    // animation within the hook if we want to play it instead. Why run_wuzi? We can also use another animation,
-    // but I've tested with this one mostly, so let's stick to this.
-    const SString m_kGateWayBlockName = "ped";
-    const SString m_kGateWayAnimationName = "run_wuzi";
 };

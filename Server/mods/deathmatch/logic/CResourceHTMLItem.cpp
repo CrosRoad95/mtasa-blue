@@ -13,6 +13,12 @@
 // This parses it and converts into into a script
 
 #include "StdInc.h"
+#include "CResourceHTMLItem.h"
+#include "CResource.h"
+#include "CGame.h"
+#include "CMapManager.h"
+#include "lua/CLuaArguments.h"
+#include <core/CServerInterface.h>
 
 extern CServerInterface* g_pServerInterface;
 extern CGame*            g_pGame;
@@ -35,7 +41,7 @@ CResourceHTMLItem::~CResourceHTMLItem()
     Stop();
 }
 
-ResponseCode CResourceHTMLItem::Request(HttpRequest* ipoHttpRequest, HttpResponse* ipoHttpResponse, CAccount* account)
+HttpStatusCode CResourceHTMLItem::Request(HttpRequest* ipoHttpRequest, HttpResponse* ipoHttpResponse, CAccount* account)
 {
     if (!m_pVM)
         Start();
@@ -43,12 +49,12 @@ ResponseCode CResourceHTMLItem::Request(HttpRequest* ipoHttpRequest, HttpRespons
     if (m_bIsBeingRequested)
     {
         ipoHttpResponse->SetBody("Busy!", strlen("Busy!"));
-        return HTTPRESPONSECODE_500_INTERNALSERVERERROR;
+        return HTTP_STATUS_CODE_500_INTERNAL_SERVER_ERROR;
     }
 
     m_bIsBeingRequested = true;
 
-    m_responseCode = HTTPRESPONSECODE_200_OK;
+    m_responseCode = HTTP_STATUS_CODE_200_OK;
 
     if (!m_bIsRaw)
     {
@@ -75,6 +81,44 @@ ResponseCode CResourceHTMLItem::Request(HttpRequest* ipoHttpRequest, HttpRespons
             headers.PushString((*iter).second.c_str());
         }
 
+        const char* sMethod = "INVALID";
+        switch (ipoHttpRequest->nRequestMethod)
+        {
+            case REQUESTMETHOD_GET:
+                sMethod = "GET";
+                break;
+            case REQUESTMETHOD_OPTIONS:
+                sMethod = "OPTIONS";
+                break;
+            case REQUESTMETHOD_HEAD:
+                sMethod = "HEAD";
+                break;
+            case REQUESTMETHOD_POST:
+                sMethod = "POST";
+                break;
+            case REQUESTMETHOD_PUT:
+                sMethod = "PUT";
+                break;
+            case REQUESTMETHOD_DELETE:
+                sMethod = "DELETE";
+                break;
+            case REQUESTMETHOD_TRACE:
+                sMethod = "TRACE";
+                break;
+            case REQUESTMETHOD_CONNECT:
+                sMethod = "CONNECT";
+                break;
+            case REQUESTMETHOD_PATCH:
+                sMethod = "PATCH";
+                break;
+            case REQUESTMETHOD_LAST:
+                sMethod = "LAST";
+                break;
+            case REQUESTMETHOD_UNKNOWN:
+                sMethod = "UNKNOWN";
+                break;
+        }
+
         m_currentResponse = ipoHttpResponse;
         CLuaArguments querystring(formData);
         CLuaArguments args;
@@ -85,6 +129,8 @@ ResponseCode CResourceHTMLItem::Request(HttpRequest* ipoHttpRequest, HttpRespons
         args.PushString(ipoHttpRequest->sOriginalUri.c_str());            // url
         args.PushTable(&querystring);                                     // querystring
         args.PushAccount(account);
+        args.PushString(ipoHttpRequest->sBody);            // requestBody
+        args.PushString(sMethod);                          // method
 
         // g_pGame->Lock(); // get the mutex (blocking)
         args.CallGlobal(m_pVM, "renderPage");
@@ -130,7 +176,7 @@ void CResourceHTMLItem::SetResponseHeader(const char* szHeaderName, const char* 
 
 void CResourceHTMLItem::SetResponseCode(int responseCode)
 {
-    m_responseCode = (ResponseCode)responseCode;
+    m_responseCode = static_cast<HttpStatusCode>(responseCode);
 }
 
 void CResourceHTMLItem::SetResponseCookie(const char* szCookieName, const char* szCookieValue)
@@ -162,7 +208,7 @@ bool CResourceHTMLItem::Start()
         bool        bJustStartedCodeBlock = false;
         bool        bIsShorthandCodeBlock = false;
         std::string strScript;
-        strScript += "function renderPage ( requestHeaders, form, cookies, hostname, url, querystring, user )\n";
+        strScript += "function renderPage ( requestHeaders, form, cookies, hostname, url, querystring, user, requestBody, method )\n";
         strScript += "\nhttpWrite ( \"";            // bit hacky, possibly can be terminated straight away
         unsigned char c;
         int           i = 0;
@@ -256,6 +302,8 @@ bool CResourceHTMLItem::Start()
              fclose ( debug );*/
 
         m_pVM = g_pGame->GetLuaManager()->CreateVirtualMachine(m_resource, m_bOOPEnabled);
+        m_pVM->LoadEmbeddedScripts();
+        m_pVM->RegisterModuleFunctions();
         m_pVM->LoadScript(strScript.c_str());
         m_pVM->SetResourceFile(this);
         m_pVM->RegisterHTMLDFunctions();
@@ -298,6 +346,8 @@ void CResourceHTMLItem::GetMimeType(const char* szFilename)
             m_strMime = "image/jpg";
         else if (strcmp(pExtn, "js") == 0)
             m_strMime = "text/javascript";
+        else if (strcmp(pExtn, "map") == 0)
+            m_strMime = "application/json";
         else
             m_strMime = "text/html";
     }

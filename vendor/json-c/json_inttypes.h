@@ -17,7 +17,13 @@
 
 #define PRId64 "I64d"
 #define SCNd64 "I64d"
+#define PRIu64 "I64u"
 
+#endif
+
+#if defined(_MSC_VER)
+#include <BaseTsd.h>
+typedef SSIZE_T ssize_t;
 #endif
 
 #endif

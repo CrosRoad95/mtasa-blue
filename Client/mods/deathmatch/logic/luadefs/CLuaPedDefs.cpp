@@ -10,16 +10,21 @@
  *****************************************************************************/
 
 #include "StdInc.h"
-#define MIN_CLIENT_REQ_REMOVEPEDFROMVEHICLE_CLIENTSIDE  "1.3.0-9.04482"
-#define MIN_CLIENT_REQ_WARPPEDINTOVEHICLE_CLIENTSIDE    "1.3.0-9.04482"
+#include <game/CWeapon.h>
+#include "lua/CLuaFunctionParser.h"
+#include "CMatrix_Pad.h"
+
+#define MIN_CLIENT_REQ_REMOVEPEDFROMVEHICLE_CLIENTSIDE "1.3.0-9.04482"
+#define MIN_CLIENT_REQ_WARPPEDINTOVEHICLE_CLIENTSIDE "1.3.0-9.04482"
 
 void CLuaPedDefs::LoadFunctions()
 {
-    std::map<const char*, lua_CFunction> functions{
+    constexpr static const std::pair<const char*, lua_CFunction> functions[]{
         {"createPed", CreatePed},
         {"detonateSatchels", DetonateSatchels},
         {"killPed", KillPed},
 
+        {"resetPedVoice", ArgumentParser<ResetPedVoice>},
         {"getPedVoice", GetPedVoice},
         {"setPedVoice", SetPedVoice},
         {"getPedRotation", GetPedRotation},
@@ -47,6 +52,15 @@ void CLuaPedDefs::LoadFunctions()
         {"isPedDucked", IsPedDucked},
         {"getPedStat", GetPedStat},
         {"getPedBonePosition", GetPedBonePosition},
+        {"setElementBonePosition", ArgumentParser<SetElementBonePosition>},
+        {"setElementBoneRotation", ArgumentParser<SetElementBoneRotation>},
+        {"setElementBoneQuaternion", ArgumentParser<SetElementBoneQuaternion>},
+        {"getElementBonePosition", ArgumentParser<GetElementBonePosition>},
+        {"getElementBoneRotation", ArgumentParser<GetElementBoneRotation>},
+        {"getElementBoneQuaternion", ArgumentParser<GetElementBoneQuaternion>},
+        {"setElementBoneMatrix", ArgumentParser<SetElementBoneMatrix>},
+        {"getElementBoneMatrix", ArgumentParser<GetElementBoneMatrix>},
+        {"updateElementRpHAnim", ArgumentParser<UpdateElementRpHAnim>},
         {"getPedClothes", GetPedClothes},
         {"getPedControlState", GetPedControlState},
         {"getPedAnalogControlState", GetPedAnalogControlState},
@@ -62,6 +76,7 @@ void CLuaPedDefs::LoadFunctions()
         {"isPedFootBloodEnabled", IsPedFootBloodEnabled},
         {"getPedCameraRotation", GetPedCameraRotation},
         {"getPedOxygenLevel", GetPedOxygenLevel},
+        {"isPedBleeding", ArgumentParser<IsPedBleeding>},
 
         {"setPedWeaponSlot", SetPedWeaponSlot},
         {"setPedRotation", SetPedRotation},
@@ -75,7 +90,7 @@ void CLuaPedDefs::LoadFunctions()
         {"setPedControlState", SetPedControlState},
         {"setPedAnalogControlState", SetPedAnalogControlState},
         {"setPedDoingGangDriveby", SetPedDoingGangDriveby},
-        {"setPedFightingStyle", SetPedFightingStyle},
+        {"setPedFightingStyle", ArgumentParser<SetPedFightingStyle>},
         {"setPedLookAt", SetPedLookAt},
         {"setPedHeadless", SetPedHeadless},
         {"setPedFrozen", SetPedFrozen},
@@ -86,16 +101,17 @@ void CLuaPedDefs::LoadFunctions()
         {"warpPedIntoVehicle", WarpPedIntoVehicle},
         {"removePedFromVehicle", RemovePedFromVehicle},
         {"setPedOxygenLevel", SetPedOxygenLevel},
-        {"setPedArmor", SetPedArmor},
+        {"setPedArmor", ArgumentParser<SetPedArmor>},
         {"givePedWeapon", GivePedWeapon},
         {"isPedReloadingWeapon", IsPedReloadingWeapon},
+        {"setPedEnterVehicle", ArgumentParser<SetPedEnterVehicle>},
+        {"setPedExitVehicle", ArgumentParser<SetPedExitVehicle>},
+        {"setPedBleeding", ArgumentParser<SetPedBleeding>},
     };
 
     // Add functions
-    for (const auto& pair : functions)
-    {
-        CLuaCFunctions::AddFunction(pair.first, pair.second);
-    }
+    for (const auto& [name, func] : functions)
+        CLuaCFunctions::AddFunction(name, func);
 }
 
 void CLuaPedDefs::AddClass(lua_State* luaVM)
@@ -111,8 +127,6 @@ void CLuaPedDefs::AddClass(lua_State* luaVM)
     lua_classfunction(luaVM, "getTypeIndexFromClothes", "getTypeIndexFromClothes");
     lua_classfunction(luaVM, "getClothesByTypeIndex", "getClothesByTypeIndex");
     lua_classvariable(luaVM, "validModels", NULL, "getValidPedModels");
-    // lua_classvariable ( luaVM, "clothesTypeName", NULL, "getClothesTypeName" ); table
-    // lua_classvariable ( luaVM, "bodyPartName", NULL, "getBodyPartName" ); table
 
     lua_classfunction(luaVM, "canBeKnockedOffBike", "canPedBeKnockedOffBike");
     lua_classfunction(luaVM, "doesHaveJetPack", "doesPedHaveJetPack");
@@ -133,11 +147,12 @@ void CLuaPedDefs::AddClass(lua_State* luaVM)
     lua_classfunction(luaVM, "getOxygenLevel", "getPedOxygenLevel");
     lua_classfunction(luaVM, "getStat", "getPedStat");
     lua_classfunction(luaVM, "getTarget", "getPedTarget");
-    lua_classfunction(luaVM, "getTargetCollision", "getPedTargetCollision");
+    lua_classfunction(luaVM, "getTargetCollision", OOP_GetPedTargetCollision);
     lua_classfunction(luaVM, "getSimplestTask", "getPedSimplestTask");
     lua_classfunction(luaVM, "getTask", "getPedTask");
     lua_classfunction(luaVM, "getTotalAmmo", "getPedTotalAmmo");
     lua_classfunction(luaVM, "getVoice", "getPedVoice");
+    lua_classfunction(luaVM, "resetVoice", "resetPedVoice");
     lua_classfunction(luaVM, "getWeapon", "getPedWeapon");
     lua_classfunction(luaVM, "isChocking", "isPedChoking");
     lua_classfunction(luaVM, "isDoingGangDriveby", "isPedDoingGangDriveby");
@@ -150,13 +165,14 @@ void CLuaPedDefs::AddClass(lua_State* luaVM)
     lua_classfunction(luaVM, "isTargetingMarkerEnabled", "isPedTargetingMarkerEnabled");
     lua_classfunction(luaVM, "isDead", "isPedDead");
     lua_classfunction(luaVM, "setFootBloodEnabled", "setPedFootBloodEnabled");
-    lua_classfunction(luaVM, "getTargetEnd", "getPedTargetEnd");
-    lua_classfunction(luaVM, "getTargetStart", "getPedTargetStart");
+    lua_classfunction(luaVM, "getTargetEnd", OOP_GetPedTargetEnd);
+    lua_classfunction(luaVM, "getTargetStart", OOP_GetPedTargetStart);
     lua_classfunction(luaVM, "getWeaponMuzzlePosition", "getPedWeaponMuzzlePosition");
     lua_classfunction(luaVM, "getBonePosition", OOP_GetPedBonePosition);
     lua_classfunction(luaVM, "getCameraRotation", "getPedCameraRotation");
     lua_classfunction(luaVM, "getWeaponSlot", "getPedWeaponSlot");
     lua_classfunction(luaVM, "getWalkingStyle", "getPedWalkingStyle");
+    lua_classfunction(luaVM, "isBleeding", "isPedBleeding");
 
     lua_classfunction(luaVM, "setCanBeKnockedOffBike", "setPedCanBeKnockedOffBike");
     lua_classfunction(luaVM, "setAnalogControlState", "setPedAnalogControlState");
@@ -182,6 +198,9 @@ void CLuaPedDefs::AddClass(lua_State* luaVM)
     lua_classfunction(luaVM, "setStat", "setPedStat");
     lua_classfunction(luaVM, "giveWeapon", "givePedWeapon");
     lua_classfunction(luaVM, "isReloadingWeapon", "isPedReloadingWeapon");
+    lua_classfunction(luaVM, "setEnterVehicle", "setPedEnterVehicle");
+    lua_classfunction(luaVM, "setExitVehicle", "setPedExitVehicle");
+    lua_classfunction(luaVM, "setBleeding", "setPedBleeding");
 
     lua_classvariable(luaVM, "vehicle", OOP_WarpPedIntoVehicle, GetPedOccupiedVehicle);
     lua_classvariable(luaVM, "vehicleSeat", NULL, "getPedOccupiedVehicleSeat");
@@ -206,21 +225,25 @@ void CLuaPedDefs::AddClass(lua_State* luaVM)
     lua_classvariable(luaVM, "dead", NULL, "isPedDead");
     lua_classvariable(luaVM, "targetingMarker", "setPedTargetingMarkerEnabled", "isPedTargetingMarkerEnabled");
     lua_classvariable(luaVM, "footBlood", "setPedFootBloodEnabled", NULL);
-    lua_classvariable(luaVM, "targetCollision", NULL, "getPedTargetCollision");
-    lua_classvariable(luaVM, "targetEnd", NULL, "getPedTargetEnd");
-    lua_classvariable(luaVM, "targetStart", NULL, "getPedTargetStart");
+    lua_classvariable(luaVM, "bleeding", "setPedBleeding", "isPedBleeding");
+    lua_classvariable(luaVM, "targetCollision", nullptr, OOP_GetPedTargetCollision);
+    lua_classvariable(luaVM, "targetEnd", nullptr, OOP_GetPedTargetEnd);
+    lua_classvariable(luaVM, "targetStart", nullptr, OOP_GetPedTargetStart);
     // lua_classvariable ( luaVM, "muzzlePosition", NULL, "getPedWeaponMuzzlePosition" ); // TODO: needs to return a vector3 for oop
     lua_classvariable(luaVM, "weaponSlot", "setPedWeaponSlot", "getPedWeaponSlot");
     lua_classvariable(luaVM, "walkingStyle", "setPedWalkingStyle", "getPedWalkingStyle");
     lua_classvariable(luaVM, "reloadingWeapon", nullptr, "isPedReloadingWeapon");
 
-    // lua_classvariable ( luaVM, "ammoInClip", NULL, CLuaOOPDefs::GetPedAmmoInClip ); // .ammoInClip["slot"] (readonly)
-    // lua_classvariable ( luaVM, "analogControlState", CLuaOOPDefs::SetPedAnalogControlState, CLuaOOPDefs::GetPedAnalogControlState ); //TODO:
-    // .analogControlState["control"] = value lua_classvariable ( luaVM, "controlState", CLuaOOPDefs::SetPedControlState, CLuaOOPDefs::GetPedControlState ); //
-    // TODO: .controlState["control"] = value lua_classvariable ( luaVM, "stats", NULL, CLuaOOPDefs::GetPedStat ); // table (readonly) lua_classvariable (
-    // luaVM, "doingTask", NULL, CLuaOOPDefs::IsPedDoingTask ); // table (readonly) lua_classvariable ( luaVM, "totalAmmo", NULL, CLuaDefs::GetPedTotalAmmo );
-    // // table readonly
     lua_registerclass(luaVM, "Ped", "Element");
+}
+
+bool CLuaPedDefs::ResetPedVoice(CClientPed* ped)
+{
+    short szOldType, szNewType, szOldVoice, szNewVoice;
+    ped->GetVoice(&szOldType, &szOldVoice);
+    ped->ResetVoice();
+    ped->GetVoice(&szNewType, &szNewVoice);
+    return szNewType != szOldType && szNewVoice != szOldVoice;
 }
 
 int CLuaPedDefs::GetPedVoice(lua_State* luaVM)
@@ -614,7 +637,7 @@ int CLuaPedDefs::GetPedTarget(lua_State* luaVM)
 int CLuaPedDefs::GetPedTargetStart(lua_State* luaVM)
 {
     // Verify the argument
-    CClientPed*      pPed = NULL;
+    CClientPed*      pPed = nullptr;
     CScriptArgReader argStream(luaVM);
     argStream.ReadUserData(pPed);
 
@@ -637,10 +660,31 @@ int CLuaPedDefs::GetPedTargetStart(lua_State* luaVM)
     return 1;
 }
 
+int CLuaPedDefs::OOP_GetPedTargetStart(lua_State* luaVM)
+{
+    CClientPed*      pPed = nullptr;
+    CScriptArgReader argStream(luaVM);
+    argStream.ReadUserData(pPed);
+
+    if (argStream.HasErrors())
+        return luaL_error(luaVM, argStream.GetFullErrorMessage());
+
+    CVector vecStart;
+
+    if (pPed->GetShotData(&vecStart))
+    {
+        lua_pushvector(luaVM, vecStart);
+        return 1;
+    }
+
+    lua_pushboolean(luaVM, false);
+    return 1;
+}
+
 int CLuaPedDefs::GetPedTargetEnd(lua_State* luaVM)
 {
     // Verify the argument
-    CClientPed*      pPed = NULL;
+    CClientPed*      pPed = nullptr;
     CScriptArgReader argStream(luaVM);
     argStream.ReadUserData(pPed);
 
@@ -648,7 +692,7 @@ int CLuaPedDefs::GetPedTargetEnd(lua_State* luaVM)
     {
         // Grab the ped end target position and return it
         CVector vecEnd;
-        pPed->GetShotData(NULL, &vecEnd);
+        pPed->GetShotData(nullptr, &vecEnd);
 
         lua_pushnumber(luaVM, vecEnd.fX);
         lua_pushnumber(luaVM, vecEnd.fY);
@@ -663,10 +707,31 @@ int CLuaPedDefs::GetPedTargetEnd(lua_State* luaVM)
     return 1;
 }
 
+int CLuaPedDefs::OOP_GetPedTargetEnd(lua_State* luaVM)
+{
+    CClientPed*      pPed = nullptr;
+    CScriptArgReader argStream(luaVM);
+    argStream.ReadUserData(pPed);
+
+    if (argStream.HasErrors())
+        return luaL_error(luaVM, argStream.GetFullErrorMessage());
+
+    CVector vecEnd;
+
+    if (pPed->GetShotData(nullptr, &vecEnd))
+    {
+        lua_pushvector(luaVM, vecEnd);
+        return 1;
+    }
+
+    lua_pushboolean(luaVM, false);
+    return 1;
+}
+
 int CLuaPedDefs::GetPedTargetCollision(lua_State* luaVM)
 {
     // Verify the argument
-    CClientPed*      pPed = NULL;
+    CClientPed*      pPed = nullptr;
     CScriptArgReader argStream(luaVM);
     argStream.ReadUserData(pPed);
 
@@ -686,6 +751,26 @@ int CLuaPedDefs::GetPedTargetCollision(lua_State* luaVM)
         m_pScriptDebugging->LogCustom(luaVM, argStream.GetFullErrorMessage());
 
     // Failed
+    lua_pushboolean(luaVM, false);
+    return 1;
+}
+
+int CLuaPedDefs::OOP_GetPedTargetCollision(lua_State* luaVM)
+{
+    CClientPed*      pPed = nullptr;
+    CScriptArgReader argStream(luaVM);
+    argStream.ReadUserData(pPed);
+
+    if (argStream.HasErrors())
+        return luaL_error(luaVM, argStream.GetFullErrorMessage());
+
+    CVector vecCollision;
+    if (CStaticFunctionDefinitions::GetPedTargetCollision(*pPed, vecCollision))
+    {
+        lua_pushvector(luaVM, vecCollision);
+        return 1;
+    }
+
     lua_pushboolean(luaVM, false);
     return 1;
 }
@@ -913,6 +998,112 @@ int CLuaPedDefs::CanPedBeKnockedOffBike(lua_State* luaVM)
 
     lua_pushboolean(luaVM, false);
     return 1;
+}
+
+bool CLuaPedDefs::SetElementBonePosition(lua_State* const luaVM, CClientPed* entity, std::uint32_t boneId, CVector position)
+{
+    CEntity* theEntity = entity->GetGameEntity();
+    if (!theEntity)
+        return false;
+    return theEntity->SetBonePosition(static_cast<eBone>(boneId), position);
+}
+
+bool CLuaPedDefs::SetElementBoneRotation(lua_State* const luaVM, CClientPed* entity, std::uint32_t boneId, float yaw, float pitch, float roll)
+{
+    if (boneId > BONE_RIGHTFOOT)
+        throw LuaFunctionError("Invalid bone ID", false);
+
+    CEntity* theEntity = entity->GetGameEntity();
+    if (!theEntity)
+        return false;
+    return theEntity->SetBoneRotation(static_cast<eBone>(boneId), yaw, pitch, roll);
+}
+
+bool CLuaPedDefs::SetElementBoneQuaternion(lua_State* const luaVM, CClientPed* entity, std::uint32_t boneId, float x, float y, float z, float w)
+{
+    if (boneId > BONE_RIGHTFOOT)
+        throw LuaFunctionError("Invalid bone ID", false);
+
+    CEntity* theEntity = entity->GetGameEntity();
+    return theEntity ? theEntity->SetBoneRotationQuat(static_cast<eBone>(boneId), x, y, z, w) : false;
+}
+
+std::variant<bool, CLuaMultiReturn<float, float, float>> CLuaPedDefs::GetElementBonePosition(lua_State* const luaVM, CClientPed* entity, std::uint32_t boneId)
+{
+    CEntity* theEntity = entity->GetGameEntity();
+    CVector  position;
+    if (!theEntity || !theEntity->GetBonePosition(static_cast<eBone>(boneId), position))
+        return false;
+
+    return std::make_tuple(position.fX, position.fY, position.fZ);
+}
+
+std::variant<bool, CLuaMultiReturn<float, float, float>> CLuaPedDefs::GetElementBoneRotation(lua_State* const luaVM, CClientPed* entity, std::uint32_t boneId)
+{
+    if (boneId > BONE_RIGHTFOOT)
+        throw LuaFunctionError("Invalid bone ID", false);
+
+    float yaw = 0.0f, pitch = 0.0f, roll = 0.0f;
+    CEntity* theEntity = entity->GetGameEntity();
+    if (!theEntity || !theEntity->GetBoneRotation(static_cast<eBone>(boneId), yaw, pitch, roll))
+        return false;
+
+    return std::make_tuple(yaw, pitch, roll);
+}
+
+std::variant<bool, CLuaMultiReturn<float, float, float, float>> CLuaPedDefs::GetElementBoneQuaternion(lua_State* const luaVM, CClientPed* entity, std::uint32_t boneId)
+{
+    if (boneId > BONE_RIGHTFOOT)
+        throw LuaFunctionError("Invalid bone ID", false);
+
+    float x = 0.0f, y = 0.0f, z = 0.0f, w = 0.0f;
+    CEntity* theEntity = entity->GetGameEntity();
+    if (!theEntity || !theEntity->GetBoneRotationQuat(static_cast<eBone>(boneId), x, y, z, w))
+        return false;
+
+    return std::make_tuple(x, y, z, w);
+}
+
+bool CLuaPedDefs::SetElementBoneMatrix(lua_State* const luaVM, CClientPed* entity, std::uint32_t boneId, CMatrix boneMatrix)
+{
+    CEntity* theEntity = entity->GetGameEntity();
+    return theEntity ? theEntity->SetBoneMatrix(static_cast<eBone>(boneId), boneMatrix) : false;
+}
+
+std::variant<bool, std::array<std::array<float, 4>, 4>> CLuaPedDefs::GetElementBoneMatrix(lua_State* const luaVM, CClientPed* entity, std::uint32_t boneId)
+{
+    CEntity* theEntity = entity->GetGameEntity();
+    if (theEntity)
+    {
+        RwMatrix* boneRwMatrix = theEntity->GetBoneRwMatrix(static_cast<eBone>(boneId));
+        if (boneRwMatrix)
+        {
+            CMatrix matrix;
+            g_pGame->GetRenderWare()->RwMatrixToCMatrix(*boneRwMatrix, matrix);
+            return matrix.To4x4Array();
+        }
+    }
+    return false;
+}
+
+bool CLuaPedDefs::UpdateElementRpHAnim(lua_State* const luaVM, CClientEntity* entity)
+{
+    CEntity* theEntity = entity->GetGameEntity();
+    if (theEntity)
+    {
+        theEntity->UpdateRpHAnim();
+
+        if (theEntity->GetModelIndex() == 0)            // CJ skin
+        {
+            RpClump* clump = theEntity->GetRpClump();
+            if (clump)
+            {
+                ((void(__cdecl*)(RpClump*))0x5DF560)(clump);            // CPed::ShoulderBoneRotation
+            }
+        }
+        return true;
+    }
+    return false;
 }
 
 int CLuaPedDefs::GetPedBonePosition(lua_State* luaVM)
@@ -1359,6 +1550,11 @@ int CLuaPedDefs::IsPedFootBloodEnabled(lua_State* luaVM)
     return 1;
 }
 
+bool CLuaPedDefs::IsPedBleeding(CClientPed* pPed)
+{
+    return pPed->IsBleeding();
+}
+
 int CLuaPedDefs::GetPedCameraRotation(lua_State* luaVM)
 {
     // Verify the argument
@@ -1702,19 +1898,13 @@ int CLuaPedDefs::SetPedDoingGangDriveby(lua_State* luaVM)
     return 1;
 }
 
-int CLuaPedDefs::SetPedFightingStyle(lua_State* luaVM)
+bool CLuaPedDefs::SetPedFightingStyle(CClientEntity* const entity, const unsigned int style)
 {
-    CClientEntity*   pEntity;
-    unsigned char    ucStyle;
-    CScriptArgReader argStream(luaVM);
-    argStream.ReadUserData(pEntity);
-    argStream.ReadNumber(ucStyle);
+    // Is valid style?
+    if (style < 4 || style > 16)
+        throw std::invalid_argument("Style can only be between 4 and 16");
 
-    if (argStream.HasErrors())
-        return luaL_error(luaVM, argStream.GetFullErrorMessage());
-
-    lua_pushboolean(luaVM, CStaticFunctionDefinitions::SetPedFightingStyle(*pEntity, ucStyle));
-    return 1;
+    return CStaticFunctionDefinitions::SetPedFightingStyle(*entity, style);
 }
 
 int CLuaPedDefs::SetPedLookAt(lua_State* luaVM)
@@ -1824,6 +2014,12 @@ int CLuaPedDefs::SetPedFootBloodEnabled(lua_State* luaVM)
 
     lua_pushboolean(luaVM, false);
     return 1;
+}
+
+bool CLuaPedDefs::SetPedBleeding(CClientPed* ped, bool bleeding)
+{
+    ped->SetBleeding(bleeding);
+    return true;
 }
 
 int CLuaPedDefs::SetPedCameraRotation(lua_State* luaVM)
@@ -2138,21 +2334,10 @@ int CLuaPedDefs::SetPedMoveAnim(lua_State* luaVM)
     return 1;
 }
 
-int CLuaPedDefs::SetPedArmor(lua_State* luaVM)
+bool CLuaPedDefs::SetPedArmor(CClientPed* const ped, const float armor)
 {
-    CClientPed*      pPed;
-    float            fArmor;
-    CScriptArgReader argStream(luaVM);
-    argStream.ReadUserData(pPed);
-    argStream.ReadNumber(fArmor);
-
-    if (argStream.HasErrors())
-    {
-        return luaL_error(luaVM, argStream.GetFullErrorMessage());
-    }
-
-    lua_pushboolean(luaVM, CStaticFunctionDefinitions::SetPedArmor(*pPed, fArmor));
-    return 1;
+    ped->SetArmor(armor);
+    return true;
 }
 
 int CLuaPedDefs::SetPedOxygenLevel(lua_State* luaVM)
@@ -2227,4 +2412,16 @@ int CLuaPedDefs::DetonateSatchels(lua_State* luaVM)
     }
     lua_pushboolean(luaVM, false);
     return 1;
+}
+
+bool CLuaPedDefs::SetPedEnterVehicle(CClientPed* pPed, std::optional<CClientVehicle*> pOptVehicle, std::optional<bool> bOptPassenger)
+{
+    CClientVehicle* pVehicle = pOptVehicle.value_or(nullptr);
+    bool            bPassenger = bOptPassenger.value_or(false);
+    return pPed->EnterVehicle(pVehicle, bPassenger);
+}
+
+bool CLuaPedDefs::SetPedExitVehicle(CClientPed* pPed)
+{
+    return pPed->ExitVehicle();
 }

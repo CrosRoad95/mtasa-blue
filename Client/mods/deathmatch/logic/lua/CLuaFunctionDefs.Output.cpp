@@ -97,35 +97,6 @@ int CLuaFunctionDefs::SetClipboard(lua_State* luaVM)
     return 1;
 }
 
-int CLuaFunctionDefs::ShowChat(lua_State* luaVM)
-{
-    bool             bShow = false;
-    CScriptArgReader argStream(luaVM);
-    argStream.ReadBool(bShow);
-
-    if (!argStream.HasErrors())
-    {
-        if (CStaticFunctionDefinitions::ShowChat(bShow))
-        {
-            lua_pushboolean(luaVM, true);
-            return 1;
-        }
-    }
-    else
-        m_pScriptDebugging->LogCustom(luaVM, argStream.GetFullErrorMessage());
-
-    // Failed
-    lua_pushboolean(luaVM, false);
-    return 1;
-}
-
-int CLuaFunctionDefs::IsChatVisible(lua_State* luaVM)
-{
-    //  bool isChatVisible ()
-    lua_pushboolean(luaVM, g_pCore->IsChatVisible());
-    return 1;
-}
-
 int CLuaFunctionDefs::OutputClientDebugString(lua_State* luaVM)
 {
     SString          strText = "";
@@ -156,25 +127,23 @@ int CLuaFunctionDefs::OutputClientDebugString(lua_State* luaVM)
         CLuaMain* pLuaMain = m_pLuaManager->GetVirtualMachine(luaVM);
         if (pLuaMain)
         {
-            if (uiLevel == 1)
+            switch (uiLevel)
             {
-                m_pScriptDebugging->LogError(luaVM, "%s", strText.c_str());
-            }
-            else if (uiLevel == 2)
-            {
-                m_pScriptDebugging->LogWarning(luaVM, "%s", strText.c_str());
-            }
-            else if (uiLevel == 3)
-            {
-                m_pScriptDebugging->LogInformation(luaVM, "%s", strText.c_str());
-            }
-            else if (uiLevel == 4)
-            {
-                m_pScriptDebugging->LogCustom(luaVM, ucRed, ucGreen, ucBlue, "%s", strText.c_str());
-            }
-            else if (uiLevel == 0)
-            {
-                m_pScriptDebugging->LogDebug(luaVM, ucRed, ucGreen, ucBlue, "%s", strText.c_str());
+                case 0:
+                    m_pScriptDebugging->LogDebug(luaVM, ucRed, ucGreen, ucBlue, "%s", strText.c_str());
+                    break;
+                case 1:
+                    m_pScriptDebugging->LogError(luaVM, "%s", strText.c_str());
+                    break;
+                case 2:
+                    m_pScriptDebugging->LogWarning(luaVM, "%s", strText.c_str());
+                    break;
+                case 3:
+                    m_pScriptDebugging->LogInformation(luaVM, "%s", strText.c_str());
+                    break;
+                case 4:
+                    m_pScriptDebugging->LogCustom(luaVM, ucRed, ucGreen, ucBlue, "%s", strText.c_str());
+                    break;
             }
 
             // Success

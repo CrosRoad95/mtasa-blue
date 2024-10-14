@@ -25,6 +25,7 @@ class CPlayer;
 #include "packets/CPlayerStatsPacket.h"
 class CKeyBinds;
 class CPlayerCamera;
+enum class eVehicleAimDirection : unsigned char;
 
 enum eVoiceState
 {
@@ -64,7 +65,7 @@ struct SScreenShotInfo
     CBuffer   buffer;
 };
 
-class CPlayer : public CPed, public CClient
+class CPlayer final : public CPed, public CClient
 {
     friend class CElement;
     friend class CScriptDebugging;
@@ -93,11 +94,10 @@ public:
     void               SetMTAVersion(unsigned short usMTAVersion) { m_usMTAVersion = usMTAVersion; };
     unsigned short     GetBitStreamVersion() { return m_usBitStreamVersion; };
     void               SetBitStreamVersion(unsigned short usBitStreamVersion) { m_usBitStreamVersion = usBitStreamVersion; };
+    bool               CanBitStream(eBitStreamVersion query) { return static_cast<eBitStreamVersion>(m_usBitStreamVersion) >= query; }
     void               SetPlayerVersion(const CMtaVersion& strPlayerVersion);
     const CMtaVersion& GetPlayerVersion() { return m_strPlayerVersion; };
     bool               ShouldIgnoreMinClientVersionChecks();
-    void               SetDiscordJoinSecret(const SString& joinSecret) { m_strDiscordJoinSecret = joinSecret; }
-    SString            GetDiscordJoinSecret() const { return m_strDiscordJoinSecret; }
 
     bool IsMuted() { return m_bIsMuted; };
     void SetMuted(bool bSetMuted) { m_bIsMuted = bSetMuted; };
@@ -115,16 +115,16 @@ public:
     long GetMoney() { return m_lMoney; };
     void SetMoney(long lMoney) { m_lMoney = lMoney; };
 
-    const CVector& GetSniperSourceVector() { return m_vecSniperSource; };
-    void           SetSniperSourceVector(const CVector& vecSource) { m_vecSniperSource = vecSource; };
-    void           GetTargettingVector(CVector& vecTarget) { vecTarget = m_vecTargetting; };
-    void           SetTargettingVector(const CVector& vecTarget) { m_vecTargetting = vecTarget; };
-    float          GetAimDirection() { return m_fAimDirection; };
-    void           SetAimDirection(float fDirection) { m_fAimDirection = fDirection; };
-    unsigned char  GetDriveByDirection() { return m_ucDriveByDirection; };
-    void           SetDriveByDirection(unsigned char ucDirection) { m_ucDriveByDirection = ucDirection; };
-    bool           IsAkimboArmUp() { return m_bAkimboArmUp; };
-    void           SetAkimboArmUp(bool bUp) { m_bAkimboArmUp = bUp; };
+    const CVector&       GetSniperSourceVector() { return m_vecSniperSource; };
+    void                 SetSniperSourceVector(const CVector& vecSource) { m_vecSniperSource = vecSource; };
+    void                 GetTargettingVector(CVector& vecTarget) { vecTarget = m_vecTargetting; };
+    void                 SetTargettingVector(const CVector& vecTarget) { m_vecTargetting = vecTarget; };
+    float                GetAimDirection() { return m_fAimDirection; };
+    void                 SetAimDirection(float fDirection) { m_fAimDirection = fDirection; };
+    eVehicleAimDirection GetDriveByDirection() { return m_ucDriveByDirection; };
+    void                 SetDriveByDirection(eVehicleAimDirection ucDirection) { m_ucDriveByDirection = ucDirection; };
+    bool                 IsAkimboArmUp() { return m_bAkimboArmUp; };
+    void                 SetAkimboArmUp(bool bUp) { m_bAkimboArmUp = bUp; };
 
     NetServerPlayerID& GetSocket() { return m_PlayerSocket; };
     const char*        GetSourceIP();
@@ -167,7 +167,7 @@ public:
     std::list<CObject*>::const_iterator IterSyncingObjectEnd() { return m_SyncingObjects.end(); };
 
     unsigned int GetScriptDebugLevel() { return m_uiScriptDebugLevel; };
-    bool         SetScriptDebugLevel(unsigned int uiLevel);
+    bool         SetScriptDebugLevel(std::uint8_t level);
 
     void          SetDamageInfo(ElementID ElementID, unsigned char ucWeapon, unsigned char ucBodyPart);
     void          ValidateDamageInfo();
@@ -259,11 +259,11 @@ public:
     void                SetPlayerStat(unsigned short usID, float fValue);
     float               GetWeaponRangeFromSlot(uint uiSlot = 0xFF);
 
-    CVehicle* GetJackingVehicle() { return m_pJackingVehicle; }
-    void      SetJackingVehicle(CVehicle* pVehicle);
-
     void SetLeavingServer(bool bLeaving) noexcept { m_bIsLeavingServer = bLeaving; }
     bool IsLeavingServer() const noexcept { return m_bIsLeavingServer; }
+
+    void SetRedirecting(bool bRedirecting) noexcept { m_bIsRedirecting = bRedirecting; }
+    bool IsRedirecting() const noexcept { return m_bIsRedirecting; }
 
 protected:
     bool ReadSpecialData(const int iLine) override { return true; }
@@ -362,17 +362,17 @@ private:
     CMtaVersion    m_strPlayerVersion;
     bool           m_bIsMuted;
     bool           m_bIsLeavingServer;
+    bool           m_bIsRedirecting;
     bool           m_bIsJoined;
-    SString        m_strDiscordJoinSecret;
 
     bool m_bNametagColorOverridden;
 
-    float         m_fCameraRotation;
-    long          m_lMoney;
-    CVector       m_vecSniperSource;
-    CVector       m_vecTargetting;
-    float         m_fAimDirection;
-    unsigned char m_ucDriveByDirection;
+    float                m_fCameraRotation;
+    long                 m_lMoney;
+    CVector              m_vecSniperSource;
+    CVector              m_vecTargetting;
+    float                m_fAimDirection;
+    eVehicleAimDirection m_ucDriveByDirection;
 
     bool m_bAkimboArmUp;
 
@@ -456,7 +456,6 @@ private:
     SScreenShotInfo m_ScreenShotInfo;
 
     CPlayerStatsPacket* m_pPlayerStatsPacket;
-    CVehicle*           m_pJackingVehicle;
 
     // Used to reduce calls when calculating weapon range
     float       m_fWeaponRangeLast;

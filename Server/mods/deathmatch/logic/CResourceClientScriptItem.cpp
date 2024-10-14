@@ -13,6 +13,10 @@
 // It's task is to load and unload the script client side
 
 #include "StdInc.h"
+#include "CResourceClientScriptItem.h"
+#include "CGame.h"
+#include "CScriptDebugging.h"
+#include <zlib.h>
 
 extern CGame* g_pGame;
 
@@ -33,13 +37,13 @@ CResourceClientScriptItem::~CResourceClientScriptItem()
 {
 }
 
-ResponseCode CResourceClientScriptItem::Request(HttpRequest* ipoHttpRequest, HttpResponse* ipoHttpResponse)
+HttpStatusCode CResourceClientScriptItem::Request(HttpRequest* ipoHttpRequest, HttpResponse* ipoHttpResponse)
 {
     if (IsNoClientCache() == true)
     {
         const char* errmsg = "This script is not client cacheable";
         ipoHttpResponse->SetBody(errmsg, strlen(errmsg));
-        return HTTPRESPONSECODE_403_FORBIDDEN;
+        return HTTP_STATUS_CODE_403_FORBIDDEN;
     }
     else
         return CResourceFile::Request(ipoHttpRequest, ipoHttpResponse);

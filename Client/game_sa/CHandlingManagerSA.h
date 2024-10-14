@@ -1,11 +1,11 @@
 /*****************************************************************************
  *
- *  PROJECT:     Multi Theft Auto v1.0
+ *  PROJECT:     Multi Theft Auto
  *  LICENSE:     See LICENSE in the top level directory
- *  FILE:        game_sa/CHandlingManagerSA.h
+ *  FILE:        Client/game_sa/CHandlingManagerSA.h
  *  PURPOSE:     Header file for vehicle handling manager class
  *
- *  Multi Theft Auto is available from http://www.multitheftauto.com/
+ *  Multi Theft Auto is available from https://multitheftauto.com/
  *
  *****************************************************************************/
 
@@ -13,6 +13,9 @@
 
 #include <game/CHandlingManager.h>
 #include "CHandlingEntrySA.h"
+#include "CFlyingHandlingEntrySA.h"
+#include "CBoatHandlingEntrySA.h"
+#include "CBikeHandlingEntrySA.h"
 
 class CHandlingManagerSA : public CHandlingManager
 {
@@ -20,26 +23,22 @@ public:
     CHandlingManagerSA();
     ~CHandlingManagerSA();
 
-    CHandlingEntry* CreateHandlingData();
+    CHandlingEntry*       CreateHandlingData();
+    CFlyingHandlingEntry* CreateFlyingHandlingData();
+    CBoatHandlingEntry*   CreateBoatHandlingData();
+    CBikeHandlingEntry*   CreateBikeHandlingData();
 
-    const CHandlingEntry* GetOriginalHandlingData(eVehicleTypes eModel);
+    const CHandlingEntry*       GetOriginalHandlingData(eVehicleTypes eModel) const;
+    const CFlyingHandlingEntry* GetOriginalFlyingHandlingData(eVehicleTypes eModel) const;
+    const CBoatHandlingEntry*   GetOriginalBoatHandlingData(eVehicleTypes eModel) const;
+    const CBikeHandlingEntry*   GetOriginalBikeHandlingData(eVehicleTypes eModel) const;
 
-    eHandlingTypes GetHandlingID(eVehicleTypes eModel);
+    eHandlingProperty GetPropertyEnumFromName(const std::string& strName) const;
 
-    eHandlingProperty GetPropertyEnumFromName(std::string strName);
-
-    void CheckSuspensionChanges(CHandlingEntry* pEntry);
-    void RemoveChangedVehicle();
+    void CheckSuspensionChanges(CHandlingEntry* pEntry) noexcept;
 
 private:
     void InitializeDefaultHandlings();
 
-    static DWORD m_dwStore_LoadHandlingCfg;
-
-    // Original handling data unaffected by handling.cfg changes
-    static tHandlingDataSA   m_OriginalHandlingData[HT_MAX];
-    static CHandlingEntrySA* m_pOriginalEntries[HT_MAX];
-
-    std::map<std::string, eHandlingProperty> m_HandlingNames;
-    int                                      iChangedVehicles;
+    eHandlingTypes GetHandlingID(eVehicleTypes eModel) const;
 };

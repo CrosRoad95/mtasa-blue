@@ -147,7 +147,7 @@ bool _cdecl OnCallCStreamingInfoAddToList(int flags, SImgGTAItemInfo* pImgGTAInf
             assert(!bLoadingBigModel);
         }
 
-        int iFileId = ((int)pImgGTAInfo - 0x08E4CC0) / 20;
+        int iFileId = ((char*)pImgGTAInfo - (char*)CStreaming__ms_aInfoForModel) / 20;
 
         iReturnFileId = iFileId;
         pReturnBuffer = CMultiplayerSA::ms_PlayerImgCachePtr + pImgGTAInfo->iBlockOffset * 2048;
@@ -225,16 +225,10 @@ bool _cdecl ShouldSkipLoadRequestedModels(DWORD calledFrom)
 }
 
 // Hook info
-#define HOOKPOS_CStreamingLoadRequestedModels_US        0x15670A0
-#define HOOKPOS_CStreamingLoadRequestedModels_EU        0x1567090
-#define HOOKSIZE_CStreamingLoadRequestedModels_US       5
-#define HOOKSIZE_CStreamingLoadRequestedModels_EU       5
-DWORD RETURN_CStreamingLoadRequestedModels_US = 0x15670A5;
-DWORD RETURN_CStreamingLoadRequestedModels_EU = 0x1567095;
-DWORD RETURN_CStreamingLoadRequestedModels_BOTH = 0;
-DWORD RETURN_CStreamingLoadRequestedModelsB_US = 0x156711B;
-DWORD RETURN_CStreamingLoadRequestedModelsB_EU = 0x156710B;
-DWORD RETURN_CStreamingLoadRequestedModelsB_BOTH = 0;
+#define HOOKPOS_CStreamingLoadRequestedModels        0x15670A0
+#define HOOKSIZE_CStreamingLoadRequestedModels       5
+DWORD RETURN_CStreamingLoadRequestedModels = 0x15670A5;
+DWORD RETURN_CStreamingLoadRequestedModelsB = 0x156711B;
 void _declspec(naked) HOOK_CStreamingLoadRequestedModels()
 {
     _asm
@@ -249,12 +243,12 @@ void _declspec(naked) HOOK_CStreamingLoadRequestedModels()
         // Continue with standard code
         popad
         mov     al,byte ptr ds:[008E4A58h]
-        jmp     RETURN_CStreamingLoadRequestedModels_BOTH
+        jmp     RETURN_CStreamingLoadRequestedModels
 
         // Skip LoadRequestedModels
 skip:
         popad
-        jmp     RETURN_CStreamingLoadRequestedModelsB_BOTH
+        jmp     RETURN_CStreamingLoadRequestedModelsB
     }
 }
 

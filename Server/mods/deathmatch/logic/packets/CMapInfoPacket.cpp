@@ -10,6 +10,12 @@
  *****************************************************************************/
 
 #include "StdInc.h"
+#include "CMapInfoPacket.h"
+#include "CGame.h"
+#include "CWeaponStatManager.h"
+#include "CBuildingRemoval.h"
+#include "CBuildingRemovalManager.h"
+#include <net/SyncStructures.h>
 
 CMapInfoPacket::CMapInfoPacket(unsigned char ucWeather, unsigned char ucWeatherBlendingTo, unsigned char ucBlendedWeatherHour, unsigned char ucClockHour,
                                unsigned char ucClockMin, unsigned long ulMinuteDuration, bool bShowNametags, bool bShowRadar, float fGravity, float fGameSpeed,
@@ -133,8 +139,17 @@ bool CMapInfoPacket::Write(NetBitStreamInterface& BitStream) const
     BitStream.Write(m_WorldWaterLevelInfo.fSeaLevel);
     BitStream.WriteBit(m_WorldWaterLevelInfo.bNonSeaLevelSet);
     if (m_WorldWaterLevelInfo.bNonSeaLevelSet)
+    {
         BitStream.Write(m_WorldWaterLevelInfo.fNonSeaLevel);
-
+    }
+    if (BitStream.Can(eBitStreamVersion::SetWaterLevel_ChangeOutsideWorldLevel))
+    {
+        BitStream.WriteBit(m_WorldWaterLevelInfo.bOutsideLevelSet);
+        if (m_WorldWaterLevelInfo.bOutsideLevelSet)
+        {
+            BitStream.Write(m_WorldWaterLevelInfo.fOutsideLevel);
+        }
+    }
     BitStream.WriteCompressed(m_usFPSLimit);
 
     // Write the garage states
@@ -156,6 +171,29 @@ bool CMapInfoPacket::Write(NetBitStreamInterface& BitStream) const
     funBugs.data4.bBadDrivebyHitboxes = g_pGame->IsGlitchEnabled(CGame::GLITCH_BADDRIVEBYHITBOX);
     funBugs.data5.bQuickStand = g_pGame->IsGlitchEnabled(CGame::GLITCH_QUICKSTAND);
     BitStream.Write(&funBugs);
+
+    // Write world special properties states
+    if (BitStream.Can(eBitStreamVersion::WorldSpecialProperties))
+    {
+        SWorldSpecialPropertiesStateSync wsProps;
+        wsProps.data.hovercars = g_pGame->IsWorldSpecialPropertyEnabled(WorldSpecialProperty::HOVERCARS);
+        wsProps.data.aircars = g_pGame->IsWorldSpecialPropertyEnabled(WorldSpecialProperty::AIRCARS);
+        wsProps.data.extrabunny = g_pGame->IsWorldSpecialPropertyEnabled(WorldSpecialProperty::EXTRABUNNY);
+        wsProps.data.extrajump = g_pGame->IsWorldSpecialPropertyEnabled(WorldSpecialProperty::EXTRAJUMP);
+        wsProps.data.randomfoliage = g_pGame->IsWorldSpecialPropertyEnabled(WorldSpecialProperty::RANDOMFOLIAGE);
+        wsProps.data.snipermoon = g_pGame->IsWorldSpecialPropertyEnabled(WorldSpecialProperty::SNIPERMOON);
+        wsProps.data.extraairresistance = g_pGame->IsWorldSpecialPropertyEnabled(WorldSpecialProperty::EXTRAAIRRESISTANCE);
+        wsProps.data.underworldwarp = g_pGame->IsWorldSpecialPropertyEnabled(WorldSpecialProperty::UNDERWORLDWARP);
+        wsProps.data.vehiclesunglare = g_pGame->IsWorldSpecialPropertyEnabled(WorldSpecialProperty::VEHICLESUNGLARE);
+        wsProps.data.coronaztest = g_pGame->IsWorldSpecialPropertyEnabled(WorldSpecialProperty::CORONAZTEST);
+        wsProps.data.watercreatures = g_pGame->IsWorldSpecialPropertyEnabled(WorldSpecialProperty::WATERCREATURES);
+        wsProps.data.burnflippedcars = g_pGame->IsWorldSpecialPropertyEnabled(WorldSpecialProperty::BURNFLIPPEDCARS);
+        wsProps.data2.fireballdestruct = g_pGame->IsWorldSpecialPropertyEnabled(WorldSpecialProperty::FIREBALLDESTRUCT);
+        wsProps.data3.roadsignstext = g_pGame->IsWorldSpecialPropertyEnabled(WorldSpecialProperty::ROADSIGNSTEXT);
+        wsProps.data4.extendedwatercannons = g_pGame->IsWorldSpecialPropertyEnabled(WorldSpecialProperty::EXTENDEDWATERCANNONS);
+        wsProps.data5.tunnelweatherblend = g_pGame->IsWorldSpecialPropertyEnabled(WorldSpecialProperty::TUNNELWEATHERBLEND);
+        BitStream.Write(&wsProps);
+    }
 
     BitStream.Write(m_fJetpackMaxHeight);
 

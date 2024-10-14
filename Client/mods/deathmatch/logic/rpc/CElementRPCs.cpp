@@ -48,39 +48,36 @@ void CElementRPCs::LoadFunctions()
     AddHandler(SET_WEAPON_OWNER, SetWeaponOwner, "setWeaponOwner");
     AddHandler(SET_CUSTOM_WEAPON_FLAGS, SetWeaponConfig, "setWeaponFlags");
     AddHandler(SET_PROPAGATE_CALLS_ENABLED, SetCallPropagationEnabled, "setCallPropagationEnabled");
+    AddHandler(SET_COLPOLYGON_HEIGHT, SetColPolygonHeight, "setColShapePolygonHeight");
 }
 
 #define RUN_CHILDREN_SERVER(func) \
     if (pSource->CountChildren() && pSource->IsCallPropagationEnabled()) \
     { \
-        CElementListSnapshot* pList = pSource->GetChildrenListSnapshot(); \
-        pList->AddRef(); /* Keep list alive during use */ \
+        CElementListSnapshotRef pList = pSource->GetChildrenListSnapshot(); \
         for (CElementListSnapshot::const_iterator iter = pList->begin(); iter != pList->end(); iter++) \
             if (!(*iter)->IsBeingDeleted() && !(*iter)->IsLocalEntity()) \
                 func; \
-        pList->Release(); \
     }
 
 void CElementRPCs::SetElementParent(CClientEntity* pSource, NetBitStreamInterface& bitStream)
 {
     // Read out the entity id and parent id
     ElementID ParentID;
-    if (bitStream.Read(ParentID))
-    {
-        CClientEntity* pParent = CElementIDs::GetElement(ParentID);
-        if (pParent)
-        {
-            pSource->SetParent(pParent);
-        }
-        else
-        {
-            // TODO: raise an error
-        }
-    }
-    else
-    {
-        // TODO: raise an error
-    }
+    if (!bitStream.Read(ParentID))
+        return;
+
+    CClientEntity* pParent = CElementIDs::GetElement(ParentID);
+    if (!pParent)
+        return;
+
+    if (pParent->IsMyChild(pSource, true))
+        return;
+
+    if (pSource->IsMyChild(pParent, true))
+        return;
+
+    pSource->SetParent(pParent);
 }
 
 void CElementRPCs::SetElementData(CClientEntity* pSource, NetBitStreamInterface& bitStream)
@@ -253,6 +250,15 @@ void CElementRPCs::SetElementInterior(CClientEntity* pSource, NetBitStreamInterf
     if (bitStream.Read(ucInterior) && bitStream.Read(ucSetPosition))
     {
         pSource->SetInterior(ucInterior);
+        if (pSource->GetType() == CCLIENTPLAYER)
+        {
+            CClientPlayer* pPlayer = static_cast<CClientPlayer*>(pSource);
+            if (pPlayer->IsLocalPlayer())
+            {
+                // Update all of our streamers/managers to the local player's interior
+                m_pClientGame->SetAllInteriors(ucInterior);
+            }
+        }
 
         if (ucSetPosition == 1)
         {
@@ -429,13 +435,13 @@ void CElementRPCs::SetElementModel(CClientEntity* pSource, NetBitStreamInterface
 
     if (!bitStream.Read(usModel))
         return;
-    
+
     switch (pSource->GetType())
     {
         case CCLIENTPED:
         case CCLIENTPLAYER:
         {
-            CClientPed* pPed = static_cast<CClientPed*>(pSource);
+            CClientPed*          pPed = static_cast<CClientPed*>(pSource);
             const unsigned short usCurrentModel = static_cast<ushort>(pPed->GetModel());
 
             if (usCurrentModel != usModel)
@@ -461,7 +467,7 @@ void CElementRPCs::SetElementModel(CClientEntity* pSource, NetBitStreamInterface
                 bitStream.Read(ucVariant2);
             }
 
-            CClientVehicle* pVehicle = static_cast<CClientVehicle*>(pSource);
+            CClientVehicle*      pVehicle = static_cast<CClientVehicle*>(pSource);
             const unsigned short usCurrentModel = pVehicle->GetModel();
 
             if (usCurrentModel != usModel)
@@ -480,9 +486,9 @@ void CElementRPCs::SetElementModel(CClientEntity* pSource, NetBitStreamInterface
         case CCLIENTOBJECT:
         case CCLIENTWEAPON:
         {
-            CClientObject* pObject = static_cast<CClientObject*>(pSource);
+            CClientObject*       pObject = static_cast<CClientObject*>(pSource);
             const unsigned short usCurrentModel = pObject->GetModel();
-            
+
             if (usCurrentModel != usModel)
             {
                 pObject->SetModel(usModel);
@@ -741,5 +747,15 @@ void CElementRPCs::SetCallPropagationEnabled(CClientEntity* pSource, NetBitStrea
     if (bitStream.ReadBit(bEnabled))
     {
         pSource->SetCallPropagationEnabled(bEnabled);
+    }
+}
+
+void CElementRPCs::SetColPolygonHeight(CClientEntity* pSource, NetBitStreamInterface& bitStream)
+{
+    float fFloor, fCeil;
+    if (bitStream.Read(fFloor) && bitStream.Read(fCeil))
+    {
+        CClientColPolygon* pColPolygon = static_cast<CClientColPolygon*>(pSource);
+        pColPolygon->SetHeight(fFloor, fCeil);
     }
 }

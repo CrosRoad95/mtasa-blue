@@ -35,15 +35,17 @@ public:
     ~CLuaArgument();
 
     const CLuaArgument& operator=(const CLuaArgument& Argument);
-    bool                operator==(const CLuaArgument& Argument);
-    bool                operator!=(const CLuaArgument& Argument);
+    bool                operator==(const CLuaArgument& Argument) const;
+    bool                operator!=(const CLuaArgument& Argument) const;
 
     void Read(lua_State* luaVM, int iArgument, CFastHashMap<const void*, CLuaArguments*>* pKnownTables = NULL);
     void Push(lua_State* luaVM, CFastHashMap<CLuaArguments*, int>* pKnownTables = NULL) const;
 
     void ReadBool(bool bBool);
     void ReadNumber(double dNumber);
-    void ReadString(const std::string& strString);
+    void ReadString(const std::string& string);
+    void ReadString(const std::string_view& string);
+    void ReadString(const char* string);
     void ReadElement(CElement* pElement);
     void ReadElementID(ElementID ID);
     void ReadScriptID(uint uiScriptID);
@@ -55,15 +57,59 @@ public:
     lua_Number         GetNumber() const { return m_Number; };
     const std::string& GetString() { return m_strString; };
     void*              GetUserData() const { return m_pUserData; };
+    CLuaArguments*     GetTable() const { return m_pTableData; }
     CElement*          GetElement() const;
     bool               GetAsString(SString& strBuffer);
 
-    
     bool         ReadFromBitStream(NetBitStreamInterface& bitStream, std::vector<CLuaArguments*>* pKnownTables = NULL);
     bool         WriteToBitStream(NetBitStreamInterface& bitStream, CFastHashMap<CLuaArguments*, unsigned long>* pKnownTables = NULL) const;
     json_object* WriteToJSONObject(bool bSerialize = false, CFastHashMap<CLuaArguments*, unsigned long>* pKnownTables = NULL);
     bool         ReadFromJSONObject(json_object* object, std::vector<CLuaArguments*>* pKnownTables = NULL);
     char*        WriteToString(char* szBuffer, int length);
+
+    bool IsEqualTo(const CLuaArgument& compareTo, std::set<const CLuaArguments*>* knownTables = nullptr) const;
+
+    [[nodiscard]] bool IsString() const noexcept { return m_iType == LUA_TSTRING; }
+
+    [[nodiscard]] bool TryGetString(std::string_view& string) const noexcept
+    {
+        if (IsString())
+        {
+            string = m_strString;
+            return true;
+        }
+
+        string = {};
+        return false;
+    }
+
+    [[nodiscard]] bool IsNumber() const noexcept { return m_iType == LUA_TNUMBER; }
+
+    [[nodiscard]] bool TryGetNumber(lua_Number& number) const noexcept
+    {
+        if (IsNumber())
+        {
+            number = m_Number;
+            return true;
+        }
+
+        number = {};
+        return false;
+    }
+
+    [[nodiscard]] bool IsTable() const noexcept;
+
+    [[nodiscard]] bool TryGetTable(CLuaArguments*& table) const noexcept
+    {
+        if (IsTable())
+        {
+            table = m_pTableData;
+            return true;
+        }
+
+        table = nullptr;
+        return false;
+    }
 
 private:
     void LogUnableToPacketize(const char* szMessage) const;
@@ -82,6 +128,5 @@ private:
 #endif
 
     void CopyRecursive(const CLuaArgument& Argument, CFastHashMap<CLuaArguments*, CLuaArguments*>* pKnownTables = NULL);
-    bool CompareRecursive(const CLuaArgument& Argument, std::set<CLuaArguments*>* pKnownTables = NULL);
     void DeleteTableData();
 };

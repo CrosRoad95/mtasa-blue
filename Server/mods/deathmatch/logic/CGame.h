@@ -102,7 +102,7 @@ class CVehicleManager;
 class CZoneNames;
 class CLanBroadcast;
 class CWaterManager;
-
+class CTrainTrackManager;
 class CWeaponStatManager;
 class CBuildingRemovalManager;
 
@@ -133,6 +133,17 @@ class CVoiceDataPacket;
 class CWeaponDamageCheckPacket;
 
 typedef SFixedArray<bool, MAX_GARAGES> SGarageStates;
+
+struct ResetWorldPropsInfo
+{
+    bool resetSpecialProperties{};
+    bool resetWorldProperties{};
+    bool resetWeatherProperties{};
+    bool resetLODs{};
+    bool resetSounds{};
+    bool resetGlitches{};
+    bool resetJetpackWeapons{};
+};
 
 // CSendList - Can be used like a std::list of players for sending packets.
 //             Used to construct an optimized list of players for CGame::Broadcast
@@ -182,6 +193,7 @@ public:
         GLITCH_FASTSPRINT,
         GLITCH_BADDRIVEBYHITBOX,
         GLITCH_QUICKSTAND,
+        GLITCH_KICKOUTOFVEHICLE_ONMODELREPLACE,
         NUM_GLITCHES
     };
 
@@ -251,6 +263,8 @@ public:
     CFunctionUseLogger*              GetFunctionUseLogger() { return m_pFunctionUseLogger; }
     CMasterServerAnnouncer*          GetMasterServerAnnouncer() { return m_pMasterServerAnnouncer; }
     SharedUtil::CAsyncTaskScheduler* GetAsyncTaskScheduler() { return m_pAsyncTaskScheduler; }
+
+    std::shared_ptr<CTrainTrackManager> GetTrainTrackManager() { return m_pTrainTrackManager; }
 
     void JoinPlayer(CPlayer& Player);
     void InitialDataStream(CPlayer& Player);
@@ -414,6 +428,9 @@ public:
     eGlitchType GetGlitchIndex(const std::string& strGlitch) { return m_GlitchNames[strGlitch]; }
     bool        IsGlitch(const std::string& strGlitch) { return m_GlitchNames.count(strGlitch) > 0; }
 
+    bool IsWorldSpecialPropertyEnabled(WorldSpecialProperty property) { return m_WorldSpecialProps[property]; }
+    void SetWorldSpecialPropertyEnabled(WorldSpecialProperty property, bool isEnabled) { m_WorldSpecialProps[property] = isEnabled; }
+
     void SetCloudsEnabled(bool bEnabled);
     bool GetCloudsEnabled();
 
@@ -425,6 +442,8 @@ public:
 
     int  GetMoonSize() { return m_iMoonSize; }
     void SetMoonSize(int iMoonSize) { m_iMoonSize = iMoonSize; }
+
+    void ResetWorldProperties(const ResetWorldPropsInfo& resetPropsInfo);
 
     void PrintLogOutputFromNetModule();
     void StartOpenPortsTest();
@@ -448,13 +467,17 @@ public:
     void SendSyncSettings(CPlayer* pPlayer = NULL);
 
     CMtaVersion CalculateMinClientRequirement();
-    bool    IsBelowMinimumClient(const CMtaVersion& strVersion);
-    bool    IsBelowRecommendedClient(const CMtaVersion& strVersion);
-    void    ApplyAseSetting();
-    bool    IsUsingMtaServerConf() { return m_bUsingMtaServerConf; }
+    bool        IsBelowMinimumClient(const CMtaVersion& strVersion);
+    bool        IsBelowRecommendedClient(const CMtaVersion& strVersion);
+    void        ApplyAseSetting();
+    void        ApplyPlayerTriggeredEventIntervalChange();
+    bool        IsUsingMtaServerConf() { return m_bUsingMtaServerConf; }
 
     void SetDevelopmentMode(bool enabled) { m_DevelopmentModeEnabled = enabled; }
     bool GetDevelopmentMode() { return m_DevelopmentModeEnabled; }
+
+    bool IsClientTransferBoxVisible() const { return m_showClientTransferBox; }
+    void SetClientTransferBoxVisible(bool visible) { m_showClientTransferBox = visible; }
 
 private:
     void AddBuiltInEvents();
@@ -495,9 +518,12 @@ private:
     void Packet_PlayerScreenShot(class CPlayerScreenShotPacket& Packet);
     void Packet_PlayerNoSocket(class CPlayerNoSocketPacket& Packet);
     void Packet_PlayerNetworkStatus(class CPlayerNetworkStatusPacket& Packet);
-    void Packet_DiscordJoin(class CDiscordJoinPacket& Packet);
+    void Packet_PlayerResourceStart(class CPlayerResourceStartPacket& Packet);
 
     static void PlayerCompleteConnect(CPlayer* pPlayer);
+
+    void ProcessClientTriggeredEventSpam();
+    void RegisterClientTriggeredEventUsage(CPlayer* pPlayer);
 
     // Technically, this could be put somewhere else.  It's a callback function
     // which the voice server library will call to send out data.
@@ -552,6 +578,8 @@ private:
 
     CWeaponStatManager*      m_pWeaponStatsManager;
     CBuildingRemovalManager* m_pBuildingRemovalManager;
+
+    std::shared_ptr<CTrainTrackManager> m_pTrainTrackManager;
 
     CCustomWeaponManager* m_pCustomWeaponManager;
     CFunctionUseLogger*   m_pFunctionUseLogger;
@@ -617,6 +645,7 @@ private:
     std::map<std::string, eGlitchType>            m_GlitchNames;
     SFixedArray<bool, NUM_GLITCHES>               m_Glitches;
     SFixedArray<bool, WEAPONTYPE_LAST_WEAPONTYPE> m_JetpackWeapons;
+    std::map<WorldSpecialProperty, bool>          m_WorldSpecialProps;
 
     // This is ticked to true when the app should end
     bool m_bIsFinished;
@@ -645,4 +674,16 @@ private:
     SharedUtil::CAsyncTaskScheduler* m_pAsyncTaskScheduler;
 
     bool m_DevelopmentModeEnabled;
+    bool m_showClientTransferBox = true;
+
+    int m_iMaxClientTriggeredEventsPerInterval = 100;
+    int m_iClientTriggeredEventsIntervalMs = 1000;
+
+    struct ClientTriggeredEventsInfo
+    {
+        long long m_llTicks = 0;
+        uint32_t  m_uiCounter = 0;
+    };
+
+    std::map<CPlayer*, ClientTriggeredEventsInfo> m_mapClientTriggeredEvents;
 };

@@ -1,15 +1,18 @@
 /*****************************************************************************
  *
- *  PROJECT:     Multi Theft Auto v1.0
+ *  PROJECT:     Multi Theft Auto
  *  LICENSE:     See LICENSE in the top level directory
- *  FILE:        mods/deathmatch/logic/CHandlingManager.cpp
+ *  FILE:        Server/mods/deathmatch/logic/CHandlingManager.cpp
  *  PURPOSE:     Vehicle handling manager
  *
- *  Multi Theft Auto is available from http://www.multitheftauto.com/
+ *  Multi Theft Auto is available from https://multitheftauto.com/
  *
  *****************************************************************************/
 
 #include "StdInc.h"
+#include "CHandlingManager.h"
+#include "CCommon.h"
+#include "CVehicleManager.h"
 
 SFixedArray<tHandlingData, HT_MAX> CHandlingManager::m_OriginalHandlingData;
 
@@ -21,15 +24,13 @@ CHandlingManager::CHandlingManager()
     // Initialize all default handlings
     InitializeDefaultHandlings();
 
-    // Create a handling entry for every original handling data
+    // Create a handling entry
     for (int i = 0; i < HT_MAX; i++)
     {
+        // For every original handling data
         m_pOriginalEntries[i] = new CHandlingEntry(&m_OriginalHandlingData[i]);
-    }
 
-    // Create a handling entry for every model
-    for (int i = 0; i < HT_MAX; i++)
-    {
+        // For every model
         m_pModelEntries[i] = new CHandlingEntry(&m_OriginalHandlingData[i]);
         m_bModelHandlingChanged[i] = false;
     }
@@ -75,97 +76,83 @@ CHandlingManager::CHandlingManager()
 
 CHandlingManager::~CHandlingManager()
 {
-    // Destroy all original handling entries
+    // Destroy
     for (int i = 0; i < HT_MAX; i++)
     {
+        // All original handling entries
         delete m_pOriginalEntries[i];
-    }
 
-    // Destroy all model handling entries
-    for (int i = 0; i < HT_MAX; i++)
-    {
+        // All model handling entries
         delete m_pModelEntries[i];
     }
 }
 
 CHandlingEntry* CHandlingManager::CreateHandlingData()
 {
-    CHandlingEntry* pHandlingEntry = new CHandlingEntry();
-    return pHandlingEntry;
+    return new CHandlingEntry;
 }
 
 bool CHandlingManager::ApplyHandlingData(eVehicleTypes eModel, CHandlingEntry* pEntry)
 {
     // Within range?
-    if (eModel >= 400 && eModel < VT_MAX)
-    {
-        // Get our Handling ID
-        eHandlingTypes eHandling = GetHandlingID(eModel);
-        // Apply the data and return success
-        m_pModelEntries[eHandling]->ApplyHandlingData(pEntry);
-        return true;
-    }
+    if (!CVehicleManager::IsValidModel(eModel))
+        return false;
 
-    // Failed
-    return false;
+    // Get our Handling ID
+    eHandlingTypes eHandling = GetHandlingID(eModel);
+    // Apply the data and return success
+    m_pModelEntries[eHandling]->ApplyHandlingData(pEntry);
+    return true;
 }
 
 const CHandlingEntry* CHandlingManager::GetOriginalHandlingData(eVehicleTypes eModel)
 {
     // Within range?
-    if (eModel >= 400 && eModel < VT_MAX)
-    {
-        // Get our Handling ID
-        eHandlingTypes eHandling = GetHandlingID(eModel);
-        // Return it
-        return m_pOriginalEntries[eHandling];
-    }
+    if (!CVehicleManager::IsValidModel(eModel))
+        return nullptr;
 
-    return NULL;
+    // Get our Handling ID
+    eHandlingTypes eHandling = GetHandlingID(eModel);
+    // Return it
+    return m_pOriginalEntries[eHandling];
 }
 
 const CHandlingEntry* CHandlingManager::GetModelHandlingData(eVehicleTypes eModel)
 {
     // Within range?
-    if (eModel >= 400 && eModel < VT_MAX)
-    {
-        // Get our Handling ID
-        eHandlingTypes eHandling = GetHandlingID(eModel);
-        // Return it
-        return m_pModelEntries[eHandling];
-    }
+    if (!CVehicleManager::IsValidModel(eModel))
+        return nullptr;
 
-    return NULL;
+    // Get our Handling ID
+    eHandlingTypes eHandling = GetHandlingID(eModel);
+    // Return it
+    return m_pModelEntries[eHandling];
 }
 
-eHandlingProperty CHandlingManager::GetPropertyEnumFromName(std::string strName)
+eHandlingProperty CHandlingManager::GetPropertyEnumFromName(const std::string& strName)
 {
-    std::map<std::string, eHandlingProperty>::iterator it;
-    it = m_HandlingNames.find(strName);
-
-    if (it != m_HandlingNames.end())
-    {
-        return it->second;
-    }
-
-    return HANDLING_MAX;
+    const auto it = m_HandlingNames.find(strName);
+    return it != m_HandlingNames.end() ? it->second : HANDLING_MAX;
 }
 
 bool CHandlingManager::HasModelHandlingChanged(eVehicleTypes eModel)
 {
     // Within range?
-    if (eModel >= 400 && eModel < VT_MAX)
-    {
-        // Get our Handling ID
-        eHandlingTypes eHandling = GetHandlingID(eModel);
-        // Return if we have changed
-        return m_bModelHandlingChanged[eHandling];
-    }
-    return false;
+    if (!CVehicleManager::IsValidModel(eModel))
+        return false;
+
+    // Get our Handling ID
+    eHandlingTypes eHandling = GetHandlingID(eModel);
+    // Return if we have changed
+    return m_bModelHandlingChanged[eHandling];
 }
 
 void CHandlingManager::SetModelHandlingHasChanged(eVehicleTypes eModel, bool bChanged)
 {
+    // Within range?
+    if (!CVehicleManager::IsValidModel(eModel))
+        return;
+
     // Get our Handling ID
     eHandlingTypes eHandling = GetHandlingID(eModel);
     // Return if we have changed.
@@ -8174,27 +8161,27 @@ void CHandlingManager::InitializeDefaultHandlings()
     m_OriginalHandlingData[209].ucTailLight = 1;
     m_OriginalHandlingData[209].ucAnimGroup = 0;
 
-    m_OriginalHandlingData[210] = m_OriginalHandlingData[69];   // HT_HOTRINA = HT_HOTRING
+    m_OriginalHandlingData[210] = m_OriginalHandlingData[69];            // HT_HOTRINA = HT_HOTRING
     m_OriginalHandlingData[210].iVehicleID = 210;
 
-    m_OriginalHandlingData[211] = m_OriginalHandlingData[69];   // HT_HOTRINB = HT_HOTRING
+    m_OriginalHandlingData[211] = m_OriginalHandlingData[69];            // HT_HOTRINB = HT_HOTRING
     m_OriginalHandlingData[211].iVehicleID = 211;
 
-    m_OriginalHandlingData[212] = m_OriginalHandlingData[103];  // HT_SADLSHIT = HT_SADLER
+    m_OriginalHandlingData[212] = m_OriginalHandlingData[103];            // HT_SADLSHIT = HT_SADLER
     m_OriginalHandlingData[212].iVehicleID = 212;
 
-    m_OriginalHandlingData[213] = m_OriginalHandlingData[52];   // HT_GLENSHIT = HT_GLENDALE
+    m_OriginalHandlingData[213] = m_OriginalHandlingData[52];            // HT_GLENSHIT = HT_GLENDALE
     m_OriginalHandlingData[213].iVehicleID = 213;
 
-    m_OriginalHandlingData[214] = m_OriginalHandlingData[163];  // HT_FAGGIO = HT_PIZZABOY
+    m_OriginalHandlingData[214] = m_OriginalHandlingData[163];            // HT_FAGGIO = HT_PIZZABOY
     m_OriginalHandlingData[214].iVehicleID = 214;
 
-    m_OriginalHandlingData[215] = m_OriginalHandlingData[7];    // HT_FIRELA = HT_FIRETRUK
+    m_OriginalHandlingData[215] = m_OriginalHandlingData[7];            // HT_FIRELA = HT_FIRETRUK
     m_OriginalHandlingData[215].iVehicleID = 215;
 
-    m_OriginalHandlingData[216] = m_OriginalHandlingData[65];   // HT_RNCHLURE = HT_RANCHER
+    m_OriginalHandlingData[216] = m_OriginalHandlingData[65];            // HT_RNCHLURE = HT_RANCHER
     m_OriginalHandlingData[216].iVehicleID = 216;
 
-    m_OriginalHandlingData[217] = m_OriginalHandlingData[126];  // HT_FREIBOX = HT_FREIFLAT
+    m_OriginalHandlingData[217] = m_OriginalHandlingData[126];            // HT_FREIBOX = HT_FREIFLAT
     m_OriginalHandlingData[217].iVehicleID = 217;
 }

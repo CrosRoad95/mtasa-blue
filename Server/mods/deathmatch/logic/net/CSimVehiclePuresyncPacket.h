@@ -7,12 +7,18 @@
  *
  *****************************************************************************/
 
+#pragma once
+
+#include <net/SyncStructures.h>
+
 struct STrailerInfo
 {
     ElementID m_TrailerID;
     CVector   m_TrailerPosition;
     CVector   m_TrailerRotationDeg;
 };
+
+enum class eVehicleAimDirection : unsigned char;
 
 class CSimVehiclePuresyncPacket : public CSimPacket
 {
@@ -85,7 +91,7 @@ private:
         CVector vecSniperSource;
         CVector vecTargetting;
 
-        uchar ucDriveByDirection;
+        eVehicleAimDirection ucDriveByDirection;
 
         float  fTurretX;
         float  fTurretY;

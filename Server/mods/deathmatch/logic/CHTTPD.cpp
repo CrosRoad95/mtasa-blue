@@ -8,22 +8,28 @@
  *  Multi Theft Auto is available from http://www.multitheftauto.com/
  *
  *****************************************************************************/
+
 #include "StdInc.h"
+#include "CHTTPD.h"
+#include "CGame.h"
+#include "CAccountManager.h"
+#include "CMainConfig.h"
 #include <cryptopp/rsa.h>
 #include <cryptopp/osrng.h>
 #include <SharedUtil.Crypto.h>
+
+#ifndef WIN32
+    #include <sys/socket.h>
+    #include <netinet/in.h>
+    #include <arpa/inet.h>
+#endif
 
 extern CGame* g_pGame;
 
 CHTTPD::CHTTPD()
     : m_BruteForceProtect(4, 30000, 60000 * 5)            // Max of 4 attempts per 30 seconds, then 5 minute ignore
-      ,
-      m_HttpDosProtect(0, 0, 0)
+    , m_HttpDosProtect(0, 0, 0)
 {
-    m_resource = NULL;
-    m_server = NULL;
-    m_bStartedServer = false;
-
     m_pGuestAccount = g_pGame->GetAccountManager()->AddGuestAccount(HTTP_GUEST_ACCOUNT_NAME);
 
     m_HttpDosProtect = CConnectHistory(g_pGame->GetConfig()->GetHTTPDosThreshold(), 10000,
@@ -95,7 +101,7 @@ HttpResponse* CHTTPD::RouteRequest(HttpRequest* ipoHttpRequest)
         HttpResponse* poHttpResponse = new HttpResponse(ipoHttpRequest->m_nRequestId, ipoHttpRequest->m_poSourceEHSConnection);
         SStringX      strWait("The server is not ready. Please try again in a minute.");
         poHttpResponse->SetBody(strWait.c_str(), strWait.size());
-        poHttpResponse->m_nResponseCode = HTTPRESPONSECODE_200_OK;
+        poHttpResponse->m_nResponseCode = HTTP_STATUS_CODE_200_OK;
         return poHttpResponse;
     }
 
@@ -110,7 +116,7 @@ HttpResponse* CHTTPD::RouteRequest(HttpRequest* ipoHttpRequest)
 // Called from worker thread. g_pGame->Lock() has already been called.
 // creates a page based on user input -- either displays data from
 //   form or presents a form for users to submit data.
-ResponseCode CHTTPD::HandleRequest(HttpRequest* ipoHttpRequest, HttpResponse* ipoHttpResponse)
+HttpStatusCode CHTTPD::HandleRequest(HttpRequest* ipoHttpRequest, HttpResponse* ipoHttpResponse)
 {
     // Check if server verification was requested
     auto challenge = ipoHttpRequest->oRequestHeaders["crypto_challenge"];
@@ -139,7 +145,7 @@ ResponseCode CHTTPD::HandleRequest(HttpRequest* ipoHttpRequest, HttpResponse* ip
             if (!cipherText.empty())
             {
                 ipoHttpResponse->SetBody((const char*)cipherText.BytePtr(), cipherText.SizeInBytes());
-                return HTTPRESPONSECODE_200_OK;
+                return HTTP_STATUS_CODE_200_OK;
             }
             else
                 CLogger::LogPrintf(LOGLEVEL_MEDIUM, "ERROR: Empty crypto challenge was passed during verification\n");
@@ -150,7 +156,7 @@ ResponseCode CHTTPD::HandleRequest(HttpRequest* ipoHttpRequest, HttpResponse* ip
         }
 
         ipoHttpResponse->SetBody("", 0);
-        return HTTPRESPONSECODE_401_UNAUTHORIZED;
+        return HTTP_STATUS_CODE_401_UNAUTHORIZED;
     }
 
     CAccount* account = CheckAuthentication(ipoHttpRequest);
@@ -163,7 +169,7 @@ ResponseCode CHTTPD::HandleRequest(HttpRequest* ipoHttpRequest, HttpResponse* ip
             ipoHttpResponse->SetBody(strWelcome.c_str(), strWelcome.size());
             SString strNewURL("http://%s/%s/", ipoHttpRequest->oRequestHeaders["host"].c_str(), m_strDefaultResourceName.c_str());
             ipoHttpResponse->oResponseHeaders["location"] = strNewURL.c_str();
-            return HTTPRESPONSECODE_302_FOUND;
+            return HTTP_STATUS_CODE_302_FOUND;
         }
     }
 
@@ -172,10 +178,10 @@ ResponseCode CHTTPD::HandleRequest(HttpRequest* ipoHttpRequest, HttpResponse* ip
         "resource.<br/><br/>Alternatively, the server may be still starting up, if so, please try again in a minute.",
         ipoHttpRequest->oRequestHeaders["host"].c_str());
     ipoHttpResponse->SetBody(strWelcome.c_str(), strWelcome.size());
-    return HTTPRESPONSECODE_200_OK;
+    return HTTP_STATUS_CODE_200_OK;
 }
 
-ResponseCode CHTTPD::RequestLogin(HttpRequest* ipoHttpRequest, HttpResponse* ipoHttpResponse)
+HttpStatusCode CHTTPD::RequestLogin(HttpRequest* ipoHttpRequest, HttpResponse* ipoHttpResponse)
 {
     if (m_WarnMessageTimer.Get() < 4000 && m_strWarnMessageForIp == ipoHttpRequest->GetAddress())
     {
@@ -185,76 +191,109 @@ ResponseCode CHTTPD::RequestLogin(HttpRequest* ipoHttpRequest, HttpResponse* ipo
                               "https:"
                               "//mtasa.com/authserialhttp");
         ipoHttpResponse->SetBody(strMessage, strMessage.length());
-        return HTTPRESPONSECODE_401_UNAUTHORIZED;
+        return HTTP_STATUS_CODE_401_UNAUTHORIZED;
     }
 
     const char* szAuthenticateMessage = "Access denied, please login";
     ipoHttpResponse->SetBody(szAuthenticateMessage, strlen(szAuthenticateMessage));
     SString strName("Basic realm=\"%s\"", g_pGame->GetConfig()->GetServerName().c_str());
     ipoHttpResponse->oResponseHeaders["WWW-Authenticate"] = strName.c_str();
-    return HTTPRESPONSECODE_401_UNAUTHORIZED;
+    return HTTP_STATUS_CODE_401_UNAUTHORIZED;
 }
 
 CAccount* CHTTPD::CheckAuthentication(HttpRequest* ipoHttpRequest)
 {
-    string authorization = ipoHttpRequest->oRequestHeaders["authorization"];
-    if (authorization.length() > 6)
+    const std::string strAuthorization = ipoHttpRequest->oRequestHeaders["authorization"];
+
+    if (strAuthorization.length() < 7 || strAuthorization.substr(0, 6) != "Basic ")
     {
-        if (authorization.substr(0, 6) == "Basic ")
+        return m_pGuestAccount;
+    }
+
+    const std::string strAddress = ipoHttpRequest->GetAddress();
+    const char*       szAddress = strAddress.c_str();
+    const bool        bIsFlooding = m_BruteForceProtect.IsFlooding(szAddress);
+
+    // Basic auth
+    SString strAuthName, strAuthPassword;
+
+    // If we're not flooding, or authorization header value isn't crazy long, let's parse it to get the username for console logs
+    if (!bIsFlooding || strAuthorization.length() < 768)
+    {
+        SString strAuthDecoded = SharedUtil::Base64decode(strAuthorization.substr(6));
+        strAuthDecoded.Split(":", &strAuthName, &strAuthPassword);
+    }
+
+    if (bIsFlooding)
+    {
+        if (strAuthName.length() > 0)
         {
-            // Basic auth
-            SString strAuthDecoded = SharedUtil::Base64decode(authorization.substr(6));
+            CLogger::AuthPrintf("HTTP: Ignoring login attempt for user '%s' from %s\n", strAuthName.substr(0, CAccountManager::MAX_USERNAME_LENGTH).c_str(),
+                                szAddress);
+        }
+        else
+        {
+            CLogger::AuthPrintf("HTTP: Ignoring login attempt from %s\n", szAddress);
+        }
 
-            SString authName, authPassword;
-            strAuthDecoded.Split(":", &authName, &authPassword);
+        return m_pGuestAccount;
+    }
 
-            if (m_BruteForceProtect.IsFlooding(ipoHttpRequest->GetAddress().c_str()))
+    if (strAuthName.length() < CAccountManager::MIN_USERNAME_LENGTH || strAuthName.length() > CAccountManager::MAX_USERNAME_LENGTH ||
+        strAuthPassword.length() < MIN_PASSWORD_LENGTH)
+    {
+        m_BruteForceProtect.AddConnect(szAddress);
+
+        CLogger::AuthPrintf("HTTP: Failed login attempt from %s (bad login)\n", szAddress);
+
+        return m_pGuestAccount;
+    }
+
+    if (CAccount* pAccount = g_pGame->GetAccountManager()->Get(strAuthName.c_str()); pAccount)
+    {
+        bool bSkipIpCheck;
+
+        // Check that the password is right
+        if (pAccount->IsPassword(strAuthPassword, &bSkipIpCheck))
+        {
+            // Check that it isn't the Console account
+            if (pAccount->GetName() != CONSOLE_ACCOUNT_NAME)
             {
-                CLogger::AuthPrintf("HTTP: Ignoring login attempt for user '%s' from %s\n", authName.c_str(), ipoHttpRequest->GetAddress().c_str());
-                return m_pGuestAccount;
-            }
-
-            CAccount* account = g_pGame->GetAccountManager()->Get(authName.c_str());
-            if (account)
-            {
-                // Check that the password is right
-                bool bSkipIpCheck;
-                if (account->IsPassword(authPassword.c_str(), &bSkipIpCheck))
+                // Do IP check if required
+                if (!bSkipIpCheck && !g_pGame->GetAccountManager()->IsHttpLoginAllowed(pAccount, strAddress))
                 {
-                    // Check that it isn't the Console account
-                    std::string strAccountName = account->GetName();
-                    if (strAccountName.compare(CONSOLE_ACCOUNT_NAME) != 0)
+                    if (m_WarnMessageTimer.Get() > 8000 || m_strWarnMessageForIp != strAddress)
                     {
-                        // Do IP check if required
-                        if (!bSkipIpCheck && !g_pGame->GetAccountManager()->IsHttpLoginAllowed(account, ipoHttpRequest->GetAddress()))
-                        {
-                            if (m_WarnMessageTimer.Get() > 8000 || m_strWarnMessageForIp != ipoHttpRequest->GetAddress())
-                            {
-                                m_strWarnMessageForIp = ipoHttpRequest->GetAddress();
-                                m_WarnMessageTimer.Reset();
-                            }
-                            CLogger::AuthPrintf("HTTP: Failed login for user '%s' because %s not associated with authorized serial\n", authName.c_str(),
-                                                ipoHttpRequest->GetAddress().c_str());
-                            return m_pGuestAccount;
-                        }
-
-                        // Handle initial login logging
-                        std::lock_guard<std::mutex> guard(m_mutexLoggedInMap);
-                        if (m_LoggedInMap.find(authName) == m_LoggedInMap.end())
-                            CLogger::AuthPrintf("HTTP: '%s' entered correct password from %s\n", authName.c_str(), ipoHttpRequest->GetAddress().c_str());
-                        m_LoggedInMap[authName] = GetTickCount64_();
-                        account->OnLoginHttpSuccess(ipoHttpRequest->GetAddress());
-                        return account;
+                        m_strWarnMessageForIp = strAddress;
+                        m_WarnMessageTimer.Reset();
                     }
+
+                    CLogger::AuthPrintf("HTTP: Failed login for user '%s' because %s not associated with authorized serial\n", strAuthName.c_str(), szAddress);
+
+                    return m_pGuestAccount;
                 }
-            }
-            if (authName.length() > 0)
-            {
-                m_BruteForceProtect.AddConnect(ipoHttpRequest->GetAddress().c_str());
-                CLogger::AuthPrintf("HTTP: Failed login attempt for user '%s' from %s\n", authName.c_str(), ipoHttpRequest->GetAddress().c_str());
+
+                // Handle initial login logging
+                std::lock_guard guard(m_mutexLoggedInMap);
+
+                if (m_LoggedInMap.find(strAuthName) == m_LoggedInMap.end())
+                {
+                    CLogger::AuthPrintf("HTTP: '%s' entered correct password from %s\n", strAuthName.c_str(), szAddress);
+                }
+
+                m_LoggedInMap[strAuthName] = GetTickCount64_();
+
+                pAccount->OnLoginHttpSuccess(strAddress);
+
+                return pAccount;
             }
         }
     }
+
+    m_BruteForceProtect.AddConnect(szAddress);
+
+    CLogger::AuthPrintf("HTTP: Failed login attempt for user '%s' from %s\n", strAuthName.c_str(), szAddress);
+
     return m_pGuestAccount;
 }
 

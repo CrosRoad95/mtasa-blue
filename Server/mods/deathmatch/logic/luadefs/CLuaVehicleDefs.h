@@ -62,15 +62,14 @@ public:
     LUA_DECLARE(IsTrainDerailable);
     LUA_DECLARE(GetTrainDirection);
     LUA_DECLARE(GetTrainSpeed);
-    LUA_DECLARE(GetTrainTrack);
+    static std::variant<CTrainTrack*, bool> GetTrainTrack(CVehicle* pVehicle);
     LUA_DECLARE(GetTrainPosition);
-    LUA_DECLARE(IsVehicleBlown);
+    static bool IsVehicleBlown(CVehicle* vehicle);
     LUA_DECLARE(GetVehicleHeadLightColor);
     LUA_DECLARE(GetVehicleDoorOpenRatio);
 
     // Vehicle set functions
     LUA_DECLARE(FixVehicle);
-    LUA_DECLARE(BlowVehicle);
     LUA_DECLARE(SetVehicleRotation);
     LUA_DECLARE(SetVehicleTurnVelocity);
     LUA_DECLARE(SetVehicleColor);
@@ -93,6 +92,9 @@ public:
     LUA_DECLARE(SetVehicleRespawnRotation);
     LUA_DECLARE_OOP(GetVehicleRespawnPosition);
     LUA_DECLARE_OOP(GetVehicleRespawnRotation);
+    static bool IsVehicleRespawnable(CVehicle* vehicle) noexcept;
+    static uint32_t GetVehicleRespawnDelay(CVehicle* vehicle) noexcept;
+    static uint32_t GetVehicleIdleRespawnDelay(CVehicle* vehicle) noexcept;
     LUA_DECLARE(ToggleVehicleRespawn);
     LUA_DECLARE(ResetVehicleExplosionTime);
     LUA_DECLARE(ResetVehicleIdleTime);
@@ -111,7 +113,7 @@ public:
     LUA_DECLARE(SetTrainDerailable);
     LUA_DECLARE(SetTrainDirection);
     LUA_DECLARE(SetTrainSpeed);
-    LUA_DECLARE(SetTrainTrack);
+    static bool SetTrainTrack(CVehicle* pVehicle, CTrainTrack* pTrack);
     LUA_DECLARE(SetTrainPosition);
     LUA_DECLARE(SetVehicleHeadLightColor);
     LUA_DECLARE(SetVehicleTurretPosition);
@@ -123,4 +125,6 @@ public:
     LUA_DECLARE(GetVehicleSirens);
     LUA_DECLARE(GetVehicleSirenParams);
     LUA_DECLARE(SetVehiclePlateText);
+
+    static bool SpawnVehicleFlyingComponent(CVehicle* const vehicle, std::uint8_t nodeIndex, std::optional<std::uint8_t> componentCollisionType, std::optional<std::uint32_t> removalTime);
 };

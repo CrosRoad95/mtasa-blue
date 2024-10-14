@@ -11,8 +11,6 @@
 
 #pragma once
 
-#include "Common.h"
-#include "COffsets.h"
 #include <game/CEntity.h>
 #include <CMatrix.h>
 #include <CMatrix_Pad.h>
@@ -27,12 +25,12 @@
 #define FUNC_CMatrix__ConvertToEulerAngles                  0x59A840
 #define FUNC_CMatrix__ConvertFromEulerAngles                0x59AA40
 
-#define FUNC_IsOnScreen                                     0x534540
 #define FUNC_IsVisible                                      0x536BC0
 
 // not in CEntity really
 #define FUNC_RpAnimBlendClumpGetAssociation                 0x4D6870
 
+class CRect;
 class CEntitySAInterfaceVTBL
 {
 public:
@@ -112,7 +110,7 @@ class CSimpleTransformSAInterface            // 16 bytes
 {
 public:
     CVector m_translate;
-    FLOAT   m_heading;
+    float   m_heading;
 };
 
 class CPlaceableSAInterface            // 20 bytes
@@ -125,7 +123,7 @@ public:
 class CEntitySAInterface
 {
 public:
-    CEntitySAInterfaceVTBL* vtbl;            // the virtual table
+    CEntitySAInterfaceVTBL* vtbl;            // the virtual table it should be in the CPlaceableSAInterface
 
     CPlaceableSAInterface Placeable;            // 4
 
@@ -152,12 +150,12 @@ public:
     unsigned long bDontCastShadowsOn : 1;            // Dont cast shadows on this object
     unsigned long bOffscreen : 1;                    // offscreen flag. This can only be trusted when it is set to true
     unsigned long
-                  bIsStaticWaitingForCollision : 1;            // this is used by script created entities - they are static until the collision is loaded below them
-    unsigned long bDontStream : 1;                             // tell the streaming not to stream me
-    unsigned long bUnderwater : 1;                             // this object is underwater change drawing order
-    unsigned long bHasPreRenderEffects : 1;                    // Object has a prerender effects attached to it
-    unsigned long bIsTempBuilding : 1;                         // whether or not the building is temporary (i.e. can be created and deleted more than once)
-    unsigned long bDontUpdateHierarchy : 1;                    // Don't update the aniamtion hierarchy this frame
+        bIsStaticWaitingForCollision : 1;              // this is used by script created entities - they are static until the collision is loaded below them
+    unsigned long bDontStream : 1;                     // tell the streaming not to stream me
+    unsigned long bUnderwater : 1;                     // this object is underwater change drawing order
+    unsigned long bHasPreRenderEffects : 1;            // Object has a prerender effects attached to it
+    unsigned long bIsTempBuilding : 1;                 // whether or not the building is temporary (i.e. can be created and deleted more than once)
+    unsigned long bDontUpdateHierarchy : 1;            // Don't update the aniamtion hierarchy this frame
 
     unsigned long bHasRoadsignText : 1;            // entity is roadsign and has some 2deffect text stuff to be rendered
     unsigned long bDisplayedSuperLowLOD : 1;
@@ -193,6 +191,13 @@ public:
 
     uint8 m_pad0;            // 55
 
+    CRect*      GetBoundRect_(CRect* pRect);
+    void        TransformFromObjectSpace(CVector& outPosn, CVector const& offset);
+    CVector*    GetBoundCentre(CVector* pOutCentre);
+    void        UpdateRW();
+    void        UpdateRpHAnim();
+    static void StaticSetHooks();
+
     //
     // Functions to hide member variable misuse
     //
@@ -219,6 +224,28 @@ public:
             return numLodChildrenRendered & 0x1f;
         return -1;
     }
+
+    void ResolveReferences()
+    {
+        using CEntity_ResolveReferences = void*(__thiscall*)(CEntitySAInterface*);
+        ((CEntity_ResolveReferences)0x571A40)(this);
+    };
+
+    void RemoveShadows()
+    {
+        using CStencilShadow_dtorByOwner = void*(__cdecl*)(CEntitySAInterface * pEntity);
+        ((CStencilShadow_dtorByOwner)0x711730)(this);
+    };
+
+    void DeleteRwObject()
+    {
+        using vtbl_DeleteRwObject = void(__thiscall*)(CEntitySAInterface * pEntity);
+        ((vtbl_DeleteRwObject)this->vtbl->DeleteRwObject)(this);
+    };
+
+    bool HasMatrix() const noexcept { return Placeable.matrix != nullptr; }
+
+    void RemoveMatrix() { ((void(__thiscall*)(void*))0x54F3B0)(this); }
 };
 static_assert(sizeof(CEntitySAInterface) == 0x38, "Invalid size for CEntitySAInterface");
 
@@ -227,24 +254,23 @@ class CEntitySA : public virtual CEntity
     friend class COffsets;
 
 public:
-    CEntitySA();
-
     CEntitySAInterface* m_pInterface;
 
-    DWORD internalID;
-    //  VOID                        SetModelAlpha ( int iAlpha );
-
+    CEntitySA();
     CEntitySAInterface* GetInterface() { return m_pInterface; };
-    VOID                SetInterface(CEntitySAInterface* intInterface) { m_pInterface = intInterface; };
+    void                SetInterface(CEntitySAInterface* intInterface) { m_pInterface = intInterface; };
 
-    VOID SetPosition(float fX, float fY, float fZ);
-    VOID Teleport(float fX, float fY, float fZ);
-    VOID ProcessControl();
-    VOID SetupLighting();
-    VOID Render();
-    VOID SetOrientation(float fX, float fY, float fZ);
-    VOID FixBoatOrientation();            // eAi you might want to rename this
-    VOID SetPosition(CVector* vecPosition);
+    bool IsPed() { return GetEntityType() == ENTITY_TYPE_PED; }
+    void UpdateRpHAnim();
+    bool SetScaleInternal(const CVector& scale);
+    void SetPosition(float fX, float fY, float fZ);
+    void Teleport(float fX, float fY, float fZ);
+    void ProcessControl();
+    void SetupLighting();
+    void Render();
+    void SetOrientation(float fX, float fY, float fZ);
+    void FixBoatOrientation();            // eAi you might want to rename this
+    void SetPosition(CVector* vecPosition);
 
     void SetUnderwater(bool bUnderwater);
     bool GetUnderwater();
@@ -254,7 +280,7 @@ public:
     CVector*     GetPositionInternal();
     CMatrix*     GetMatrix(CMatrix* matrix);
     CMatrix*     GetMatrixInternal(CMatrix* matrix);
-    VOID         SetMatrix(CMatrix* matrix);
+    void         SetMatrix(CMatrix* matrix);
     WORD         GetModelIndex();
     eEntityType  GetEntityType();
     bool         IsOnScreen();
@@ -266,9 +292,9 @@ public:
     BYTE GetAreaCode();
     void SetAreaCode(BYTE areaCode);
 
-    FLOAT GetDistanceFromCentreOfMassToBaseOfModel();
+    float GetDistanceFromCentreOfMassToBaseOfModel();
 
-    VOID          SetEntityStatus(eEntityStatus bStatus);
+    void          SetEntityStatus(eEntityStatus bStatus);
     eEntityStatus GetEntityStatus();
 
     RwFrame*  GetFrameFromId(int id);
@@ -276,19 +302,19 @@ public:
 
     RpClump* GetRpClump();
 
-    BOOL BeingDeleted;                   // to prevent it trying to delete twice
-    BOOL DoNotRemoveFromGame;            // when deleted, if this is true, it won't be removed from the game
+    bool BeingDeleted;                   // to prevent it trying to delete twice
+    bool DoNotRemoveFromGame;            // when deleted, if this is true, it won't be removed from the game
 
-    VOID SetDoNotRemoveFromGameWhenDeleted(bool bDoNotRemoveFromGame) { DoNotRemoveFromGame = bDoNotRemoveFromGame; };
-    BOOL IsStatic() { return m_pInterface->bIsStatic; }
-    VOID SetStatic(BOOL bStatic) { m_pInterface->bIsStatic = bStatic; };
-    VOID SetUsesCollision(BOOL bUsesCollision) { m_pInterface->bUsesCollision = bUsesCollision; };
-    BOOL IsBackfaceCulled() { return m_pInterface->bBackfaceCulled; };
-    VOID SetBackfaceCulled(BOOL bBackfaceCulled) { m_pInterface->bBackfaceCulled = bBackfaceCulled; };
-    VOID SetAlpha(DWORD dwAlpha);
+    void SetDoNotRemoveFromGameWhenDeleted(bool bDoNotRemoveFromGame) { DoNotRemoveFromGame = bDoNotRemoveFromGame; };
+    bool IsStatic() { return m_pInterface->bIsStatic; }
+    void SetStatic(bool bStatic) { m_pInterface->bIsStatic = bStatic; };
+    void SetUsesCollision(bool bUsesCollision) { m_pInterface->bUsesCollision = bUsesCollision; };
+    bool IsBackfaceCulled() { return m_pInterface->bBackfaceCulled; };
+    void SetBackfaceCulled(bool bBackfaceCulled) { m_pInterface->bBackfaceCulled = bBackfaceCulled; };
+    void SetAlpha(DWORD dwAlpha);
 
-    VOID MatrixConvertFromEulerAngles(float fX, float fY, float fZ, int iUnknown);
-    VOID MatrixConvertToEulerAngles(float* fX, float* fY, float* fZ, int iUnknown);
+    void MatrixConvertFromEulerAngles(float fX, float fY, float fZ, int iUnknown);
+    void MatrixConvertToEulerAngles(float* fX, float* fY, float* fZ, int iUnknown);
 
     bool IsPlayingAnimation(char* szAnimName);
 
@@ -298,19 +324,22 @@ public:
     bool IsStaticWaitingForCollision() { return m_pInterface->bIsStaticWaitingForCollision; }
     void SetStaticWaitingForCollision(bool bStatic) { m_pInterface->bIsStaticWaitingForCollision = bStatic; }
 
-    unsigned long GetArrayID() { return m_ulArrayID; }
-    void          SetArrayID(unsigned long ulID) { m_ulArrayID = ulID; }
+    RwMatrix* GetBoneRwMatrix(eBone boneId);
+    bool      SetBoneMatrix(eBone boneId, const CMatrix& matrix);
+
+    bool GetBoneRotation(eBone boneId, float& yaw, float& pitch, float& roll);
+    bool GetBoneRotationQuat(eBone boneId, float& x, float& y, float& z, float& w);
+    bool SetBoneRotation(eBone boneId, float yaw, float pitch, float roll);
+    bool SetBoneRotationQuat(eBone boneId, float x, float y, float z, float w);
+    bool GetBonePosition(eBone boneId, CVector& position);
+    bool SetBonePosition(eBone boneId, const CVector& position);
 
     // CEntitySA interface
     virtual void OnChangingPosition(const CVector& vecNewPosition) {}
 
 private:
-    static unsigned long FUNC_CClumpModelInfo__GetFrameFromId;
-    static unsigned long FUNC_RwFrameGetLTM;
-
-    unsigned long m_ulArrayID;
-    void*         m_pStoredPointer;
-    CVector       m_LastGoodPosition;
+    void*   m_pStoredPointer;
+    CVector m_LastGoodPosition;
 };
 
 //

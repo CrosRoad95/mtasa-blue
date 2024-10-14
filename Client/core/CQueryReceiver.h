@@ -16,6 +16,7 @@ struct SQueryInfo
     {
         containingInfo = false;
         port = 0;
+        isStatusVerified = true;
         isPassworded = false;
         serials = false;
         players = 0;
@@ -33,6 +34,7 @@ struct SQueryInfo
     SString gameType;
     SString mapName;
     SString versionText;
+    bool    isStatusVerified;
     bool    isPassworded;
     bool    serials;
     ushort  players;
@@ -57,7 +59,7 @@ public:
     void RequestQuery(const SString& address, ushort port);
     void InvalidateSocket();
 
-    SQueryInfo GetServerResponse(uint restrictions = 0);
+    SQueryInfo GetServerResponse();
 
     uint GetElapsedTimeSinceLastQuery() { return static_cast<uint>(m_ElapsedTime.Get()); };
 

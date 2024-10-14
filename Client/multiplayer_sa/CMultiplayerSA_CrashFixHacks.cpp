@@ -10,9 +10,13 @@
  *****************************************************************************/
 
 #include "StdInc.h"
-#include "../game_sa/CTasksSA.h"
+#include <game/CAnimManager.h>
+#include "../game_sa/CTrainSA.h"
 #include "../game_sa/CAnimBlendSequenceSA.h"
 #include "../game_sa/CAnimBlendHierarchySA.h"
+#include "../game_sa/TaskBasicSA.h"
+#include "../game_sa/CFxSystemBPSA.h"
+#include "../game_sa/CFxSystemSA.h"
 
 extern CCoreInterface* g_pCore;
 
@@ -40,6 +44,10 @@ void _declspec(naked) CrashAverted()
 }
 
 ////////////////////////////////////////////////////////////////////////
+// CCustomCarEnvMapPipeline::CustomPipeRenderCB
+// 
+// Null mesh material pointer
+////////////////////////////////////////////////////////////////////////
 #define HOOKPOS_CrashFix_Misc1                              0x5D9A6E
 #define HOOKSIZE_CrashFix_Misc1                             6
 DWORD RETURN_CrashFix_Misc1 = 0x5D9A74;
@@ -52,7 +60,7 @@ void _declspec(naked) HOOK_CrashFix_Misc1()
         je      cont
 
         mov     eax,dword ptr ds:[008D12CCh]
-        mov     ecx,dword ptr [eax+esi]     // If [eax+esi] is 0, it causes a crash
+        mov     ecx,dword ptr [eax+esi]     // If [eax+esi] (mesh->material) is 0, it causes a crash
         test    ecx,ecx
         jne     cont
         push    1
@@ -63,6 +71,10 @@ void _declspec(naked) HOOK_CrashFix_Misc1()
     }
 }
 
+////////////////////////////////////////////////////////////////////////
+// CAutomobile::ProcessControl
+// 
+// Null CColModel pointer or corrupted m_pColData
 ////////////////////////////////////////////////////////////////////////
 #define HOOKPOS_CrashFix_Misc2                              0x6B18B0
 #define HOOKSIZE_CrashFix_Misc2                             9
@@ -95,6 +107,10 @@ void _declspec(naked) HOOK_CrashFix_Misc2()
 }
 
 ////////////////////////////////////////////////////////////////////////
+// CTaskSimpleCarOpenDoorFromOutside::ComputeAnimID
+//
+// Invalid m_veh pointer
+////////////////////////////////////////////////////////////////////////
 #define HOOKPOS_CrashFix_Misc3                              0x645FD9
 #define HOOKSIZE_CrashFix_Misc3                             6
 DWORD RETURN_CrashFix_Misc3 = 0x645FDF;
@@ -103,7 +119,7 @@ void _declspec(naked) HOOK_CrashFix_Misc3()
     _asm
     {
         test    ecx,ecx
-        je      cont        // Skip much code if ecx is zero (ped has no something)
+        je      cont        // Skip much code if ecx is zero (invalid m_veh in CTaskSimpleCarOpenDoorFromOutside)
 
         mov     edx,dword ptr [ecx+384h]
         jmp     RETURN_CrashFix_Misc3
@@ -114,6 +130,10 @@ void _declspec(naked) HOOK_CrashFix_Misc3()
     }
 }
 
+////////////////////////////////////////////////////////////////////////
+// CAESoundManager::Service
+// 
+// Division by 0
 ////////////////////////////////////////////////////////////////////////
 #define HOOKPOS_CrashFix_Misc4                              0x4F02D2
 #define HOOKSIZE_CrashFix_Misc4                             5
@@ -138,20 +158,25 @@ void _declspec(naked) HOOK_CrashFix_Misc4()
 }
 
 ////////////////////////////////////////////////////////////////////////
+// CPed::SetPedPositionInCar
+// 
+// Null pointer m_pVehicleStruct in the CVehicleModelInfo structure
+////////////////////////////////////////////////////////////////////////
 #define HOOKPOS_CrashFix_Misc5                              0x5DF949
 #define HOOKSIZE_CrashFix_Misc5                             7
 DWORD RETURN_CrashFix_Misc5 = 0x5DF950;
 DWORD RETURN_CrashFix_Misc5B = 0x5DFCC4;
 void _declspec(naked) HOOK_CrashFix_Misc5()
 {
-    _asm
-    {
-        mov     edi, dword ptr [ecx*4+0A9B0C8h]
+    _asm {
+        mov edi, dword ptr[ARRAY_ModelInfo]
+        mov     edi, dword ptr [ecx*4+edi]
         mov     edi, dword ptr [edi+5Ch]
         test    edi, edi
-        je      cont        // Skip much code if edi is zero (ped has no model)
+        je      cont            // Skip much code if edi is zero
 
-        mov     edi, dword ptr [ecx*4+0A9B0C8h]
+        mov edi, dword ptr[ARRAY_ModelInfo]
+        mov     edi, dword ptr [ecx*4+edi]
         jmp     RETURN_CrashFix_Misc5
     cont:
         push    5
@@ -162,7 +187,12 @@ void _declspec(naked) HOOK_CrashFix_Misc5()
 }
 
 ////////////////////////////////////////////////////////////////////////
-// #5465 2/2
+// RpAnimBlend::FrameUpdateCallBackSkinnedWithVelocityExtraction
+//
+// Mantis #5465 (2/2) (https://web.archive.org/web/20160411120202/http://bugs.mtasa.com/view.php?id=5465)
+//
+// Null pointer to object in the BlendNodeArrays array of the AnimBlendUpdateData structure
+////////////////////////////////////////////////////////////////////////
 #define HOOKPOS_CrashFix_Misc6                              0x4D1750
 #define HOOKSIZE_CrashFix_Misc6                             5
 DWORD RETURN_CrashFix_Misc6 = 0x4D1755;
@@ -185,7 +215,12 @@ void _declspec(naked) HOOK_CrashFix_Misc6()
 }
 
 ////////////////////////////////////////////////////////////////////////
-// #5466
+// CCollision::ProcessVerticalLine
+//
+// Mantis #5466 (https://web.archive.org/web/20160401233418/http://bugs.mtasa.com/view.php?id=5466)
+//
+// Null colModel pointer
+////////////////////////////////////////////////////////////////////////
 #define HOOKPOS_CrashFix_Misc7                              0x417BF8
 #define HOOKSIZE_CrashFix_Misc7                             5
 DWORD RETURN_CrashFix_Misc7 = 0x417BFD;
@@ -208,7 +243,12 @@ void _declspec(naked) HOOK_CrashFix_Misc7()
 }
 
 ////////////////////////////////////////////////////////////////////////
-// #5468  1/3
+// Get2DEffectAtomicCallback
+//
+// Mantis #5468  1/3 (https://web.archive.org/web/20160401233418/http://bugs.mtasa.com/view.php?id=5468)
+//
+// Null pointer atomic->geometry in the RpAtomic
+////////////////////////////////////////////////////////////////////////
 #define HOOKPOS_CrashFix_Misc8                              0x73485D
 #define HOOKSIZE_CrashFix_Misc8                             5
 DWORD RETURN_CrashFix_Misc8 = 0x734862;
@@ -231,7 +271,12 @@ void _declspec(naked) HOOK_CrashFix_Misc8()
 }
 
 ////////////////////////////////////////////////////////////////////////
-// #5468  2/3
+// CProjectileInfo::Update
+//
+// Mantis #5468 2/3 (https://web.archive.org/web/20160401233418/http://bugs.mtasa.com/view.php?id=5468)
+//
+// Null pointer projectile of type CObject* in the array CProjectileInfo::ms_apProjectile
+////////////////////////////////////////////////////////////////////////
 #define HOOKPOS_CrashFix_Misc9                              0x738B64
 #define HOOKSIZE_CrashFix_Misc9                             6
 DWORD RETURN_CrashFix_Misc9 = 0x738B6A;
@@ -254,7 +299,12 @@ void _declspec(naked) HOOK_CrashFix_Misc9()
 }
 
 ////////////////////////////////////////////////////////////////////////
-// #5468  3/3
+// CEntity::TransformFromObjectSpace
+//
+// Mantis #5468 3/3 (https://web.archive.org/web/20160401233418/http://bugs.mtasa.com/view.php?id=5468)
+//
+// Invalid pointer to a vector
+////////////////////////////////////////////////////////////////////////
 #define HOOKPOS_CrashFix_Misc10                             0x5334FE
 #define HOOKSIZE_CrashFix_Misc10                            6
 DWORD RETURN_CrashFix_Misc10 = 0x533504;
@@ -281,7 +331,12 @@ void _declspec(naked) HOOK_CrashFix_Misc10()
 }
 
 ////////////////////////////////////////////////////////////////////////
-// #5576
+// RpAnimBlend::FrameUpdateCallBackSkinned
+//
+// Mantis #5576 (https://web.archive.org/web/20160408163600/http://bugs.mtasa.com/view.php?id=5576)
+//
+// The crash likely occurs due to invalid data passed as the second argument
+////////////////////////////////////////////////////////////////////////
 #define HOOKPOS_CrashFix_Misc11                             0x4D2C62
 #define HOOKSIZE_CrashFix_Misc11                            5
 DWORD RETURN_CrashFix_Misc11 = 0x4D2C67;
@@ -304,7 +359,12 @@ void _declspec(naked) HOOK_CrashFix_Misc11()
 }
 
 ////////////////////////////////////////////////////////////////////////
-// #5530
+// CAnimManager::UncompressAnimation
+//
+// Mantis #5530 (https://web.archive.org/web/20160411114105/http://bugs.mtasa.com/view.php?id=5530)
+//
+// Null pointer of type CAnimBlendHierarchy passed to the function
+////////////////////////////////////////////////////////////////////////
 #define HOOKPOS_CrashFix_Misc12                             0x4D41C5
 #define HOOKSIZE_CrashFix_Misc12                            5
 DWORD RETURN_CrashFix_Misc12 = 0x4D41CA;
@@ -327,6 +387,10 @@ void _declspec(naked) HOOK_CrashFix_Misc12()
 }
 
 ////////////////////////////////////////////////////////////////////////
+// CAnimManager::BlendAnimation
+//
+// Invalid animation (Null pointer returned by CAnimBlendAssocGroup::GetAnimation)
+////////////////////////////////////////////////////////////////////////
 #define HOOKPOS_CrashFix_Misc13                             0x4D464E
 #define HOOKSIZE_CrashFix_Misc13                            6
 DWORD RETURN_CrashFix_Misc13 = 0x4D4654;
@@ -348,6 +412,10 @@ void _declspec(naked) HOOK_CrashFix_Misc13()
     }
 }
 
+////////////////////////////////////////////////////////////////////////
+// CAEFrontendAudioEntity::AddAudioEvent
+// 
+// Invalid pointer to the array CAEAudioEntity::m_pAudioEventVolumes
 ////////////////////////////////////////////////////////////////////////
 #define HOOKPOS_CrashFix_Misc14                             0x4DD4B5
 #define HOOKSIZE_CrashFix_Misc14                            6
@@ -394,13 +462,9 @@ void _cdecl DoWait(HANDLE hHandle)
 }
 
 // hook info
-#define HOOKPOS_FreezeFix_Misc15_US                         0x156CDAE
-#define HOOKSIZE_FreezeFix_Misc15_US                        6
-#define HOOKPOS_FreezeFix_Misc15_EU                         0x156CDEE
-#define HOOKSIZE_FreezeFix_Misc15_EU                        6
-DWORD RETURN_FreezeFix_Misc15_US = 0x156CDB4;
-DWORD RETURN_FreezeFix_Misc15_EU = 0x156CDF4;
-DWORD RETURN_FreezeFix_Misc15_BOTH = 0;
+#define HOOKPOS_FreezeFix_Misc15                        	0x156CDAE
+#define HOOKSIZE_FreezeFix_Misc15                        	6
+DWORD RETURN_FreezeFix_Misc15 = 0x156CDB4;
 void _declspec(naked) HOOK_FreezeFix_Misc15()
 {
     _asm
@@ -414,12 +478,15 @@ void _declspec(naked) HOOK_FreezeFix_Misc15()
         add esp, 4
 
         popad
-        jmp     RETURN_FreezeFix_Misc15_BOTH
+        jmp     RETURN_FreezeFix_Misc15
     }
 }
 
 ////////////////////////////////////////////////////////////////////////
-// Handle RpAnimBlendClumpGetFirstAssociation returning NULL
+// CPed::PlayFootSteps
+//
+// RpAnimBlendClumpGetFirstAssociation returns null pointer
+////////////////////////////////////////////////////////////////////////
 #define HOOKPOS_CrashFix_Misc16                             0x5E5815
 #define HOOKSIZE_CrashFix_Misc16                            6
 DWORD RETURN_CrashFix_Misc16 = 0x5E581B;
@@ -444,17 +511,14 @@ void _declspec(naked) HOOK_CrashFix_Misc16()
 }
 
 ////////////////////////////////////////////////////////////////////////
-// Handle RwFrameSetStaticPluginsSize having NULL member at 0x90
-#define HOOKPOS_CrashFix_Misc17_US                          0x7F120E
-#define HOOKSIZE_CrashFix_Misc17_US                         6
-#define HOOKPOS_CrashFix_Misc17_EU                          0x7F124E
-#define HOOKSIZE_CrashFix_Misc17_EU                         6
-DWORD RETURN_CrashFix_Misc17_US = 0x7F1214;
-DWORD RETURN_CrashFix_Misc17_EU = 0x7F1254;
-DWORD RETURN_CrashFix_Misc17_BOTH = 0;
-DWORD RETURN_CrashFix_Misc17B_US = 0x7F1236;
-DWORD RETURN_CrashFix_Misc17B_EU = 0x7F1276;
-DWORD RETURN_CrashFix_Misc17B_BOTH = 0;
+// RwFrameForAllObjects
+//
+// Null pointer for the objectList (0x90) field of the RwFrame structure
+////////////////////////////////////////////////////////////////////////
+#define HOOKPOS_CrashFix_Misc17                             0x7F120E
+#define HOOKSIZE_CrashFix_Misc17                            6
+DWORD RETURN_CrashFix_Misc17 = 0x7F1214;
+DWORD RETURN_CrashFix_Misc17B = 0x7F1236;
 void _declspec(naked) HOOK_CrashFix_Misc17()
 {
     _asm
@@ -464,17 +528,20 @@ void _declspec(naked) HOOK_CrashFix_Misc17()
 
         // continue standard path
         mov     eax, [eax+90h]
-        jmp     RETURN_CrashFix_Misc17_BOTH
+        jmp     RETURN_CrashFix_Misc17
 
     cont:
         push    17
         call    CrashAverted
-        jmp     RETURN_CrashFix_Misc17B_BOTH
+        jmp     RETURN_CrashFix_Misc17B
     }
 }
 
 ////////////////////////////////////////////////////////////////////////
-// Handle GetWheelPosition having wrong data
+// CVehicleModelInfo::GetWheelPosn
+//
+// Null pointer frame returned by CClumpModelInfo::GetFrameFromId
+////////////////////////////////////////////////////////////////////////
 #define HOOKPOS_CrashFix_Misc18                             0x4C7DAD
 #define HOOKSIZE_CrashFix_Misc18                            7
 DWORD RETURN_CrashFix_Misc18 = 0x4C7DB4;
@@ -505,17 +572,14 @@ void _declspec(naked) HOOK_CrashFix_Misc18()
 }
 
 ////////////////////////////////////////////////////////////////////////
-// Handle RwFrameCloneHierarchy having wrong data
-#define HOOKPOS_CrashFix_Misc19_US                          0x7F0BF7
-#define HOOKSIZE_CrashFix_Misc19_US                         6
-#define HOOKPOS_CrashFix_Misc19_EU                          0x7F0C37
-#define HOOKSIZE_CrashFix_Misc19_EU                         6
-DWORD RETURN_CrashFix_Misc19_US = 0x7F0BFD;
-DWORD RETURN_CrashFix_Misc19_EU = 0x7F0C3D;
-DWORD RETURN_CrashFix_Misc19_BOTH = 0;
-DWORD RETURN_CrashFix_Misc19B_US = 0x7F0C20;
-DWORD RETURN_CrashFix_Misc19B_EU = 0x7F0C60;
-DWORD RETURN_CrashFix_Misc19B_BOTH = 0;
+// RwFrameAddChild
+//
+// The pointer passed as the first argument of type RwFrame to the function is null
+////////////////////////////////////////////////////////////////////////
+#define HOOKPOS_CrashFix_Misc19                             0x7F0BF7
+#define HOOKSIZE_CrashFix_Misc19                            6
+DWORD RETURN_CrashFix_Misc19 = 0x7F0BFD;
+DWORD RETURN_CrashFix_Misc19B = 0x7F0C20;
 void _declspec(naked) HOOK_CrashFix_Misc19()
 {
     _asm
@@ -525,19 +589,22 @@ void _declspec(naked) HOOK_CrashFix_Misc19()
 
         // continue standard path
         mov     eax, [esi+98h]
-        jmp     RETURN_CrashFix_Misc19_BOTH
+        jmp     RETURN_CrashFix_Misc19
 
     cont:
         push    19
         call    CrashAverted
         mov     edx,dword ptr [ecx+98h]
         test    edx,edx
-        jmp     RETURN_CrashFix_Misc19B_BOTH
+        jmp     RETURN_CrashFix_Misc19B
     }
 }
 
 ////////////////////////////////////////////////////////////////////////
-// Handle CPlaceable::RemoveMatrix having wrong data
+// CPlaceable::RemoveMatrix
+// 
+// "this" is invalid
+////////////////////////////////////////////////////////////////////////
 #define HOOKPOS_CrashFix_Misc20                             0x54F3B0
 #define HOOKSIZE_CrashFix_Misc20                            6
 DWORD RETURN_CrashFix_Misc20 = 0x54F3B6;
@@ -560,12 +627,11 @@ void _declspec(naked) HOOK_CrashFix_Misc20()
     }
 }
 
-//////////////////////////////////////////////////////////////////////////////////////////
-//
+////////////////////////////////////////////////////////////////////////
+// CTaskSimpleCarFallOut::FinishAnimFallOutCB
+// 
 // Handle CTaskSimpleCarFallOut::FinishAnimFallOutCB having wrong data
-//
-//
-//////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////
 bool IsTaskSimpleCarFallOutValid(CAnimBlendAssociationSAInterface* pAnimBlendAssociation, CTaskSimpleCarFallOutSAInterface* pTask)
 {
     if (pTask->VTBL != (TaskVTBL*)VTBL_CTaskSimpleCarFallOut)
@@ -619,7 +685,10 @@ void _declspec(naked) HOOK_CrashFix_Misc21()
 }
 
 ////////////////////////////////////////////////////////////////////////
-// Handle CAnimBlendAssociation::Init having wrong data
+// CAnimBlendAssociation::Init
+//
+// this->m_clumpAssoc.m_pNodeArray[v5] is invalid
+////////////////////////////////////////////////////////////////////////
 #define HOOKPOS_CrashFix_Misc22                             0x4CEF08
 #define HOOKSIZE_CrashFix_Misc22                            6
 DWORD RETURN_CrashFix_Misc22 = 0x4CEF25;
@@ -665,7 +734,10 @@ void _declspec(naked) HOOK_CrashFix_Misc22()
 }
 
 ////////////////////////////////////////////////////////////////////////
-// Handle CVehicleAnimGroup::ComputeAnimDoorOffsets having wrong door index
+// CVehicleAnimGroup::ComputeAnimDoorOffsets
+//
+// Door index is out of range
+////////////////////////////////////////////////////////////////////////
 #define HOOKPOS_CrashFix_Misc23                             0x6E3D10
 #define HOOKSIZE_CrashFix_Misc23                            7
 DWORD RETURN_CrashFix_Misc23 = 0x6E3D17;
@@ -693,14 +765,13 @@ void _declspec(naked) HOOK_CrashFix_Misc23()
 }
 
 ////////////////////////////////////////////////////////////////////////
-// Handle _RwFrameForAllChildren being called with NULL
-#define HOOKPOS_CrashFix_Misc24_US                          0x7F0DC8
-#define HOOKSIZE_CrashFix_Misc24_US                         6
-#define HOOKPOS_CrashFix_Misc24_EU                          0x7F0E08
-#define HOOKSIZE_CrashFix_Misc24_EU                         6
-DWORD RETURN_CrashFix_Misc24_US = 0x7F0DCE;
-DWORD RETURN_CrashFix_Misc24_EU = 0x7F0E0E;
-DWORD RETURN_CrashFix_Misc24_BOTH = 0;
+// RwFrameForAllChildren
+// 
+// The first argument of type RwFrame received is invalid
+////////////////////////////////////////////////////////////////////////
+#define HOOKPOS_CrashFix_Misc24                             0x7F0DC8
+#define HOOKSIZE_CrashFix_Misc24                            6
+DWORD RETURN_CrashFix_Misc24 = 0x7F0DCE;
 void _declspec(naked) HOOK_CrashFix_Misc24()
 {
     _asm
@@ -710,19 +781,22 @@ void _declspec(naked) HOOK_CrashFix_Misc24()
 
         // continue standard path
         mov     eax, [ebp+98h]
-        jmp     RETURN_CrashFix_Misc24_BOTH
+        jmp     RETURN_CrashFix_Misc24
 
     cont:
         push    24
         call    CrashAverted
         mov     ebp, 0
         mov     eax, 0
-        jmp     RETURN_CrashFix_Misc24_BOTH
+        jmp     RETURN_CrashFix_Misc24
     }
 }
 
 ////////////////////////////////////////////////////////////////////////
-// Handle CTaskSimpleCarOpenDoorFromOutside::FinishAnimCarOpenDoorFromOutsideCB having zero pointer to vehicle
+// CTaskSimpleCarOpenDoorFromOutside::FinishAnimCarOpenDoorFromOutsideCB
+//
+// Null vehicle pointer
+////////////////////////////////////////////////////////////////////////
 #define HOOKPOS_CrashFix_Misc25                             0x646026
 #define HOOKSIZE_CrashFix_Misc25                            5
 DWORD RETURN_CrashFix_Misc25 = 0x64602B;
@@ -751,7 +825,10 @@ void _declspec(naked) HOOK_CrashFix_Misc25()
 }
 
 ////////////////////////////////////////////////////////////////////////
-// Handle CShotInfo::Update having invalid item
+// CShotInfo::Update
+// 
+// _creator->m_pIntelligence is invalid
+////////////////////////////////////////////////////////////////////////
 #define HOOKPOS_CrashFix_Misc26                             0x739FA0
 #define HOOKSIZE_CrashFix_Misc26                            6
 DWORD RETURN_CrashFix_Misc26 = 0x739FA6;
@@ -781,7 +858,10 @@ void _declspec(naked) HOOK_CrashFix_Misc26()
 }
 
 ////////////////////////////////////////////////////////////////////////
-// Handle CTaskComplexDieInCar::ControlSubTask ped with no vehicle
+// CTaskComplexDieInCar::ControlSubTask
+// 
+// ped or ped->m_pVehicle is null pointer
+////////////////////////////////////////////////////////////////////////
 #define HOOKPOS_CrashFix_Misc27                             0x6377FB
 #define HOOKSIZE_CrashFix_Misc27                            7
 DWORD RETURN_CrashFix_Misc27 = 0x637802;
@@ -807,7 +887,10 @@ cont:
 }
 
 ////////////////////////////////////////////////////////////////////////
-// Handle CObject::ProcessGarageDoorBehaviour object with no dummy
+// CObject::ProcessGarageDoorBehaviour
+//
+// Null this->m_pDummyObject pointer
+////////////////////////////////////////////////////////////////////////
 #define HOOKPOS_CrashFix_Misc28                             0x44A4FD
 #define HOOKSIZE_CrashFix_Misc28                            6
 DWORD RETURN_CrashFix_Misc28 = 0x44A503;
@@ -835,7 +918,10 @@ cont:
 }
 
 ////////////////////////////////////////////////////////////////////////
-// Handle CAEPCBankLoader::IsSoundBankLoaded with invalid argument
+// CAEMP3BankLoader::IsSoundBankLoaded
+//
+// The value of the argument BankSlotId is invalid
+////////////////////////////////////////////////////////////////////////
 #define HOOKPOS_CrashFix_Misc29                             0x4E022C
 #define HOOKSIZE_CrashFix_Misc29                            5
 DWORD RETURN_CrashFix_Misc29 = 0x4E0231;
@@ -863,7 +949,10 @@ cont:
 }
 
 ////////////////////////////////////////////////////////////////////////
-// Handle CAnimBlendAssociation::SetFinishCallback with invalid ecx
+// CAnimBlendAssociation::SetFinishCallback
+// 
+// "this" is invalid
+////////////////////////////////////////////////////////////////////////
 #define HOOKPOS_CrashFix_Misc30                             0x4CEBE8
 #define HOOKSIZE_CrashFix_Misc30                            7
 #define HOOKCHECK_CrashFix_Misc30                           0xC7
@@ -890,11 +979,11 @@ cont:
     }
 }
 
-//////////////////////////////////////////////////////////////////////////////////////////
-//
+////////////////////////////////////////////////////////////////////////
 // CClumpModelInfo::GetFrameFromId
 //
-//////////////////////////////////////////////////////////////////////////////////////////
+// Invalid frame
+////////////////////////////////////////////////////////////////////////
 RwFrame* OnMY_CClumpModelInfo_GetFrameFromId_Post(RwFrame* pFrameResult, DWORD _ebx, DWORD _esi, DWORD _edi, DWORD calledFrom, RpClump* pClump, int id)
 {
     if (pFrameResult)
@@ -998,33 +1087,20 @@ inner:
     }
 }
 
-struct CStreamingInfo
+CStreamingInfo* GetStreamingInfo(uint id)
 {
-    DWORD gta_hash;
-    WORD  chain_next;
-    uchar flg;
-    uchar archiveId;
-    DWORD offsetInBlocks;
-    DWORD sizeInBlocks;
-    DWORD reqload;
-};
-
-CStreamingInfo* GetStreamingInfoFromModelId(uint id)
-{
-    CStreamingInfo* pItemInfo = (CStreamingInfo*)(0x8E4CC0);
+    CStreamingInfo* pItemInfo = (CStreamingInfo*)(CStreaming__ms_aInfoForModel);
     return pItemInfo + id;
 }
 
-//////////////////////////////////////////////////////////////////////////////////////////
-//
+////////////////////////////////////////////////////////////////////////
 // CEntity::GetBoundRect
 //
-// Check if crash will occur
-//
-//////////////////////////////////////////////////////////////////////////////////////////
+// modelInfo->m_pColModel is a null pointer
+////////////////////////////////////////////////////////////////////////
 void OnMY_CEntity_GetBoundRect(CEntitySAInterface* pEntity)
 {
-    ushort                     usModelId = pEntity->m_nModelIndex;
+    uint32                     usModelId = pEntity->m_nModelIndex;
     CBaseModelInfoSAInterface* pModelInfo = ((CBaseModelInfoSAInterface**)ARRAY_ModelInfo)[usModelId];
     if (!pModelInfo)
     {
@@ -1041,11 +1117,10 @@ void OnMY_CEntity_GetBoundRect(CEntitySAInterface* pEntity)
         if (!pColModel)
         {
             // Crash will occur at offset 00134134
-            CStreamingInfo* pStreamingInfo = GetStreamingInfoFromModelId(usModelId);
-            SString         strDetails("refs:%d txd:%d RwObj:%08x bOwn:%d bColStr:%d flg:%d off:%d size:%d reqload:%d", pModelInfo->usNumberOfRefs,
-                               pModelInfo->usTextureDictionary, pModelInfo->pRwObject, pModelInfo->bDoWeOwnTheColModel,
-                               pModelInfo->bCollisionWasStreamedWithModel, pStreamingInfo->flg, pStreamingInfo->offsetInBlocks, pStreamingInfo->sizeInBlocks,
-                               pStreamingInfo->reqload);
+            CStreamingInfo* pStreamingInfo = pGameInterface->GetStreaming()->GetStreamingInfo(usModelId);
+            SString         strDetails("refs:%d txd:%d RwObj:%08x bOwn:%d flg:%d off:%d size:%d loadState:%d", pModelInfo->usNumberOfRefs,
+                               pModelInfo->usTextureDictionary, pModelInfo->pRwObject, pModelInfo->bDoWeOwnTheColModel, pStreamingInfo->flg,
+                               pStreamingInfo->offsetInBlocks, pStreamingInfo->sizeInBlocks, pStreamingInfo->loadState);
             LogEvent(815, "Model collision missing", "CEntity_GetBoundRect", SString("No collision for model:%d %s", usModelId, *strDetails), 5415);
             CArgMap argMap;
             argMap.Set("id", usModelId);
@@ -1056,10 +1131,10 @@ void OnMY_CEntity_GetBoundRect(CEntitySAInterface* pEntity)
 }
 
 // Hook info
-#define HOOKPOS_CEntity_GetBoundRect                      0x53412A
-#define HOOKSIZE_CEntity_GetBoundRect                     7
+#define HOOKPOS_CEntity_GetBoundRect                      0x534131
+#define HOOKSIZE_CEntity_GetBoundRect                     5
 #define HOOKCHECK_CEntity_GetBoundRect                    0x8B
-DWORD RETURN_CEntity_GetBoundRect = 0x534131;
+DWORD RETURN_CEntity_GetBoundRect = 0x534136;
 void _declspec(naked) HOOK_CEntity_GetBoundRect()
 {
     _asm
@@ -1071,18 +1146,17 @@ void _declspec(naked) HOOK_CEntity_GetBoundRect()
         popad
 
         // Continue replaced code
-        mov     ecx,dword ptr [eax*4+0A9B0C8h]
+        mov     eax, [ecx+14h]
+        mov     edx, [eax]
         jmp     RETURN_CEntity_GetBoundRect
     }
 }
 
-//////////////////////////////////////////////////////////////////////////////////////////
-//
+//////////////////////////////////////////////////////////////////////////
 // CVehicle_AddUpgrade
 //
 // Record some variables in case crash occurs
-//
-//////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////
 void OnMY_CVehicle_AddUpgrade_Pre(CVehicleSAInterface* pVehicle, int iUpgradeId, int iFrame)
 {
     CArgMap argMap;
@@ -1130,11 +1204,11 @@ inner:
     }
 }
 
-//////////////////////////////////////////////////////////////////////////////////////////
-//
+////////////////////////////////////////////////////////////////////////
+// CObject::~CObject, CObject::ProcessTrainCrossingBehavior
+// 
 // Train crossings: Detach barrier from post (to be able to create objects 1373 and 1374 separately)
-//
-//////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////
 #define HOOKPOS_CObject_Destructor_TrainCrossing_Check 0x59F7A8
 #define HOOKPOS_CObject_ProcessTrainCrossingBehavior1 0x5A0C34
 #define HOOKPOS_CObject_ProcessTrainCrossingBehavior2 0x5A0C54
@@ -1165,11 +1239,11 @@ jmp_invalid:
     }
 }
 
-//////////////////////////////////////////////////////////////////////////////////////////
-//
+////////////////////////////////////////////////////////////////////////
+// Interior_c::Init
+// 
 // GTA doesn't reset the furniture object counter, so do it manually everytime before GTA furnishes an interior (Interior_c::Init)
-//
-//////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////
 #define HOOKPOS_ResetFurnitureObjectCounter 0x593BF0
 #define HOOKSIZE_ResetFurnitureObjectCounter 6
 DWORD RETURN_ResetFurnitureObjectCounter = 0x593BF6;
@@ -1185,14 +1259,12 @@ void _declspec(naked) HOOK_ResetFurnitureObjectCounter()
     }
 }
 
-//////////////////////////////////////////////////////////////////////////////////////////
-//
+////////////////////////////////////////////////////////////////////////
 // CVolumetricShadowMgr_Render
-//
+// 
 // Custom models can cause problems for volumetric shadows.
 // Record when volumetric shadows are being rendered so we can disable them if a crash occurs.
-//
-//////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////
 void OnMY_CVolumetricShadowMgr_Render_Pre()
 {
     OnEnterCrashZone(1);
@@ -1231,14 +1303,12 @@ inner:
     }
 }
 
-//////////////////////////////////////////////////////////////////////////////////////////
-//
+////////////////////////////////////////////////////////////////////////
 // CVolumetricShadowMgr_Update
-//
+// 
 // Custom models can cause problems for volumetric shadows.
 // Record when volumetric shadows are being updated so we can disable them if a crash occurs.
-//
-//////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////
 void OnMY_CVolumetricShadowMgr_Update_Pre()
 {
     OnEnterCrashZone(2);
@@ -1278,13 +1348,11 @@ inner:
     }
 }
 
-//////////////////////////////////////////////////////////////////////////////////////////
-//
-// CAnimManager_CreateAnimAssocGroups
-//
-// A model (usually 7) has to be loaded to avoid a crash
-//
-//////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////
+// CAnimManager::CreateAnimAssocGroups
+// 
+// CModelInfo::ms_modelInfoPtrs at the given index is a null pointer
+////////////////////////////////////////////////////////////////////////
 void OnMY_CAnimManager_CreateAnimAssocGroups(uint uiModelId)
 {
     CModelInfo* pModelInfo = pGameInterface->GetModelInfo(uiModelId);
@@ -1315,19 +1383,21 @@ void _declspec(naked) HOOK_CAnimManager_CreateAnimAssocGroups()
         popad
 
         // Replaced code
-        mov     eax, 0x0A9B0C8[eax*4]
+        push    ecx
+        mov     ecx, dword ptr[ARRAY_ModelInfo]
+        mov     eax, dword ptr[ecx + eax*4]
+        pop     ecx
+
         jmp     RETURN_CAnimManager_CreateAnimAssocGroups
     }
 }
 
-//////////////////////////////////////////////////////////////////////////////////////////
-//
-// Something called from CTaskComplexCarSlowBeDraggedOut_CreateFirstSubTask
+////////////////////////////////////////////////////////////////////////
+// CTaskComplexCarSlowBeDraggedOut::CreateFirstSubTask
 //
 // Accessing a temporally not existing vehicle
 // (seems to happen when the driver is slower being thrown out than the jacker enters the vehicle)
-//
-//////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////
 #define HOOKPOS_CTaskComplexCarSlowBeDraggedOut_CreateFirstSubTask   0x6485AC
 #define HOOKSIZE_CTaskComplexCarSlowBeDraggedOut_CreateFirstSubTask  6
 DWORD RETURN_CTaskComplexCarSlowBeDraggedOut_CreateFirstSubTask = 0x6485B2;
@@ -1356,11 +1426,9 @@ void _declspec(naked) HOOK_CTaskComplexCarSlowBeDraggedOut_CreateFirstSubTask()
 }
 
 ////////////////////////////////////////////////////////////////////////
-//
 // OnMY_printf
-//
+// 
 // GTA outputs stuff via printf which we can use to help diagnose problems
-//
 ////////////////////////////////////////////////////////////////////////
 void _cdecl OnMY_printf(DWORD dwCalledFrom, const char* szMessage)
 {
@@ -1392,15 +1460,10 @@ void _cdecl OnMY_printf(DWORD dwCalledFrom, const char* szMessage)
 }
 
 // hook info
-#define HOOKPOS_printf_US                         0x821982
-#define HOOKSIZE_printf_US                        7
-#define HOOKCHECK_printf_US                       0x6A
-#define HOOKPOS_printf_EU                         0x8219C2
-#define HOOKSIZE_printf_EU                        7
-#define HOOKCHECK_printf_EU                       0x6A
-DWORD RETURN_printf_US = 0x821989;
-DWORD RETURN_printf_EU = 0x8219C9;
-DWORD RETURN_printf_BOTH = 0;
+#define HOOKPOS_printf                            0x821982
+#define HOOKSIZE_printf                           7
+#define HOOKCHECK_printf                          0x6A
+DWORD RETURN_printf = 0x821989;
 void _declspec(naked) HOOK_printf()
 {
     _asm
@@ -1415,26 +1478,19 @@ void _declspec(naked) HOOK_printf()
         // Replaced code
         push    10h
         push    887DC0h
-        jmp     RETURN_printf_BOTH
+        jmp     RETURN_printf
     }
 }
 
 ////////////////////////////////////////////////////////////////////////
-//
 // RwMatrixMultiply
-//
-// Check for invalid matix pointer
-//
+// 
+// The third received argument of type RwMatrixTag* is a null pointer
 ////////////////////////////////////////////////////////////////////////
-#define HOOKPOS_RwMatrixMultiply_US             0x7F18B0
-#define HOOKSIZE_RwMatrixMultiply_US            6
-#define HOOKCHECK_RwMatrixMultiply_US           0x8B
-#define HOOKPOS_RwMatrixMultiply_EU             0x7F18F0
-#define HOOKSIZE_RwMatrixMultiply_EU            6
-#define HOOKCHECK_RwMatrixMultiply_EU           0x8B
-DWORD RETURN_RwMatrixMultiply_US = 0x7F18B6;
-DWORD RETURN_RwMatrixMultiply_EU = 0x7F18F6;
-DWORD RETURN_RwMatrixMultiply_BOTH = 0;
+#define HOOKPOS_RwMatrixMultiply                0x7F18B0
+#define HOOKSIZE_RwMatrixMultiply               6
+#define HOOKCHECK_RwMatrixMultiply              0x8B
+DWORD RETURN_RwMatrixMultiply = 0x7F18B6;
 void _declspec(naked) HOOK_RwMatrixMultiply()
 {
     _asm
@@ -1444,7 +1500,7 @@ void _declspec(naked) HOOK_RwMatrixMultiply()
         jb      cont  // Skip code if eax is low
 
         mov     ecx, dword ptr ds:[0C979BCh]
-        jmp     RETURN_RwMatrixMultiply_BOTH
+        jmp     RETURN_RwMatrixMultiply
 
 cont:
         push    31
@@ -1453,22 +1509,20 @@ cont:
     }
 }
 
-//////////////////////////////////////////////////////////////////////////////////////////
-//
-// CAnimBlendNode_GetCurrentTranslation
-//
-// Check for corrupt endKeyFrameIndex
-//
-//////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////
+// CAnimBlendNode::GetCurrentTranslation
+// 
+// Invalid endKeyFrameIndex
+////////////////////////////////////////////////////////////////////////
 void OnMY_CAnimBlendNode_GetCurrentTranslation(CAnimBlendNodeSAInterface* pInterface)
 {
     // Crash will occur at offset 0xCFCD6
     OnCrashAverted(32);
     CAnimBlendAssociationSAInterface* pAnimAssoc = pInterface->pAnimBlendAssociation;
-    CAnimBlendSequenceSAInterface* pAnimSequence = pInterface->pAnimSequence;
-    CAnimBlendHierarchySAInterface* pAnimHierarchy = pAnimAssoc->pAnimHierarchy;
+    CAnimBlendSequenceSAInterface*    pAnimSequence = pInterface->pAnimSequence;
+    CAnimBlendHierarchySAInterface*   pAnimHierarchy = pAnimAssoc->pAnimHierarchy;
 
-    bool bSequenceExistsInHierarchy = false;
+    bool                           bSequenceExistsInHierarchy = false;
     CAnimBlendSequenceSAInterface* pAnimHierSequence = pAnimHierarchy->pSequences;
     for (int i = 0; i < pAnimHierarchy->usNumSequences; i++)
     {
@@ -1481,13 +1535,12 @@ void OnMY_CAnimBlendNode_GetCurrentTranslation(CAnimBlendNodeSAInterface* pInter
     }
 
     LogEvent(588, "GetCurrentTranslation", "Incorrect endKeyFrameIndex",
-        SString("m_endKeyFrameId = %d | pAnimAssoc = %p | GroupID = %d | AnimID = %d | \
+             SString("m_endKeyFrameId = %d | pAnimAssoc = %p | GroupID = %d | AnimID = %d | \
                 pAnimSeq = %p | BoneID = %d | BoneHash = %u | \
                 pAnimHier = %p | HierHash = %u | SequenceExistsInHierarchy: %s",
-            pInterface->m_endKeyFrameId, pAnimAssoc, pAnimAssoc->sAnimGroup, pAnimAssoc->sAnimID,
-            pAnimSequence, pAnimSequence->m_boneId, pAnimSequence->m_hash, pAnimHierarchy,
-            pAnimHierarchy->uiHashKey, bSequenceExistsInHierarchy ? "Yes" : "No"), 588);
-
+                     pInterface->m_endKeyFrameId, pAnimAssoc, pAnimAssoc->sAnimGroup, pAnimAssoc->sAnimID, pAnimSequence, pAnimSequence->m_boneId,
+                     pAnimSequence->m_hash, pAnimHierarchy, pAnimHierarchy->uiHashKey, bSequenceExistsInHierarchy ? "Yes" : "No"),
+             588);
 }
 
 // Hook info
@@ -1523,15 +1576,12 @@ void _declspec(naked) HOOK_CAnimBlendNode_GetCurrentTranslation()
     }
 }
 
-
-//////////////////////////////////////////////////////////////////////////////////////////
-//
-// CStreaming_AreAnimsUsedByRequestedModels
-//
+////////////////////////////////////////////////////////////////////////
+// CStreaming::AreAnimsUsedByRequestedModels
+// 
 // GTA streamer will use this function to decide if IFP blocks should be unloaded or not.
 // We will return true to disable unloading.
-//
-//////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////
 bool __cdecl OnMY_CStreaming_AreAnimsUsedByRequestedModels(int modelID)
 {
     // GTA SA possibly cannot have more than 200 IFP blocks since that's the limit
@@ -1563,17 +1613,16 @@ void _declspec(naked) HOOK_CStreaming_AreAnimsUsedByRequestedModels()
     }
 }
 
-//////////////////////////////////////////////////////////////////////////////////////////
-//
+////////////////////////////////////////////////////////////////////////
 // CTrain::ProcessControl
-//
+// 
 // This hook overwrites the logic to wrap the train's rail distance, because in the
 // original game code this could cause an infinite loop
 //
-//////////////////////////////////////////////////////////////////////////////////////////
 //     0x6F8F83 | 88 9E CA 05 00 00 | mov     [esi + 5CAh], bl
 // >>> 0x6F8F89 | D9 86 A8 05 00 00 | fld     dword ptr [esi + 5A8h]
 //     0x6F8F8F | D8 1D 50 8B 85 00 | fcomp   ds: __real @00000000
+////////////////////////////////////////////////////////////////////////
 #define HOOKPOS_CTrain__ProcessControl         0x6F8F89
 #define HOOKSIZE_CTrain__ProcessControl        6
 static DWORD CONTINUE_CTrain__ProcessControl = 0x6F8FE5;
@@ -1581,7 +1630,7 @@ static DWORD CONTINUE_CTrain__ProcessControl = 0x6F8FE5;
 // 0xC37FEC; float RailTrackLength[NUM_TRACKS]
 static float* RailTrackLength = reinterpret_cast<float*>(0xC37FEC);
 
-static void _cdecl WrapTrainRailDistance(CVehicleSAInterface* train)
+static void _cdecl WrapTrainRailDistance(CTrainSAInterface* train)
 {
     // Check if the train is driving on a valid rail track (id < NUM_TRACKS)
     if (train->m_ucRailTrackID >= 4)
@@ -1631,17 +1680,16 @@ static void _declspec(naked) HOOK_CTrain__ProcessControl()
     }
 }
 
-//////////////////////////////////////////////////////////////////////////////////////////
-//
+////////////////////////////////////////////////////////////////////////
 // CTaskComplexCarSlowBeDraggedOutAndStandUp::CreateFirstSubTask
-//
+// 
 // This hook adds a null-pointer check for eax, which stores the ped's current vehicle.
 // Returning a null-pointer from this function will prevent the animation from being played.
 //
-//////////////////////////////////////////////////////////////////////////////////////////
 //     0x648AAC | C2 04 00             | retn   4
 // >>> 0x648AAF | 8B 80 84 03 00 00    | mov    eax, [eax + 384h]
 //     0x648AB5 | 0F B6 80 DE 00 00 00 | movzx  eax, byte ptr [eax + 0DEh]
+////////////////////////////////////////////////////////////////////////
 #define HOOKPOS_CTaskComplexCarSlowBeDraggedOutAndStandUp__CreateFirstSubTask         0x648AAF
 #define HOOKSIZE_CTaskComplexCarSlowBeDraggedOutAndStandUp__CreateFirstSubTask        6
 static DWORD CONTINUE_CTaskComplexCarSlowBeDraggedOutAndStandUp__CreateFirstSubTask = 0x648AB5;
@@ -1670,16 +1718,14 @@ static void _declspec(naked) HOOK_CTaskComplexCarSlowBeDraggedOutAndStandUp__Cre
     }
 }
 
-//////////////////////////////////////////////////////////////////////////////////////////
-//
+////////////////////////////////////////////////////////////////////////
 // CVehicleModelInfo::LoadVehicleColours
-//
+// 
 // A modified data/carcols.dat can have entries with invalid model names and these cause
 // CModelInfo::GetModelInfo to return a null pointer, but the original code doesn't verify
 // the return value and tries to use the null pointer. This hook adds a null pointer check
 // and then skips the line if in the null case. There are two locations to hook.
-//
-//////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////
 static void _cdecl LOG_CVehicleModelInfo__LoadVehicleColours(int location, const char* modelName)
 {
     LogEvent(820 + location, "CVehicleModelInfo::LoadVehicleColours", "Could not find model by name:", modelName);
@@ -1692,7 +1738,7 @@ static void _cdecl LOG_CVehicleModelInfo__LoadVehicleColours(int location, const
 #define HOOKPOS_CVehicleModelInfo__LoadVehicleColours_1         0x5B6B20
 #define HOOKSIZE_CVehicleModelInfo__LoadVehicleColours_1        5
 static DWORD CONTINUE_CVehicleModelInfo__LoadVehicleColours_1 = 0x5B6B25;
-static DWORD SKIP_CVehicleModelInfo__LoadVehicleColours_1     = 0x5B6D04;
+static DWORD SKIP_CVehicleModelInfo__LoadVehicleColours_1 = 0x5B6D04;
 
 static void _declspec(naked) HOOK_CVehicleModelInfo__LoadVehicleColours_1()
 {
@@ -1700,7 +1746,7 @@ static void _declspec(naked) HOOK_CVehicleModelInfo__LoadVehicleColours_1()
     {
         test    eax, eax
         jnz     continueLoadingColorLineLocation
-        
+
         pushad
         lea     ecx, [esp + 55Ch - 440h]
         push    ecx
@@ -1726,7 +1772,7 @@ static void _declspec(naked) HOOK_CVehicleModelInfo__LoadVehicleColours_1()
 #define HOOKPOS_CVehicleModelInfo__LoadVehicleColours_2         0x5B6CAA
 #define HOOKSIZE_CVehicleModelInfo__LoadVehicleColours_2        5
 static DWORD CONTINUE_CVehicleModelInfo__LoadVehicleColours_2 = 0x5B6CAF;
-static DWORD SKIP_CVehicleModelInfo__LoadVehicleColours_2     = 0x5B6D04;
+static DWORD SKIP_CVehicleModelInfo__LoadVehicleColours_2 = 0x5B6D04;
 
 static void _declspec(naked) HOOK_CVehicleModelInfo__LoadVehicleColours_2()
 {
@@ -1734,7 +1780,7 @@ static void _declspec(naked) HOOK_CVehicleModelInfo__LoadVehicleColours_2()
     {
         test    eax, eax
         jnz     continueLoadingColorLineLocation
-        
+
         pushad
         lea     ecx, [esp + 59Ch - 440h]
         push    ecx
@@ -1753,17 +1799,16 @@ static void _declspec(naked) HOOK_CVehicleModelInfo__LoadVehicleColours_2()
     }
 }
 
-//////////////////////////////////////////////////////////////////////////////////////////
-//
+////////////////////////////////////////////////////////////////////////
 // CPlaceName::Process
-//
+// 
 // Prevent the original game code from accessing the ped's vehicle, when it's a null pointer
 // and the ped flag bInVehicle is set by setting the ped flag to zero.
 //
-//////////////////////////////////////////////////////////////////////////////////////////
 //     0x571F37 | 8B F1             | mov   esi, ecx
 // >>> 0x571F39 | 8B 88 6C 04 00 00 | mov   ecx, [eax + 46Ch]
 //     0x571F3F | F6 C5 01          | test  ch, 1
+////////////////////////////////////////////////////////////////////////
 #define HOOKPOS_CPlaceName__Process         0x571F39
 #define HOOKSIZE_CPlaceName__Process        6
 static DWORD CONTINUE_CPlaceName__Process = 0x571F3F;
@@ -1789,11 +1834,266 @@ static void _declspec(naked) HOOK_CPlaceName__Process()
     }
 }
 
+////////////////////////////////////////////////////////////////////////
+// CWorld::FindObjectsKindaCollidingSectorList
+//
+// A null pointer at the given index in CModelInfo::ms_modelInfoPtrs or a null pointer in the m_pColModel field
+////////////////////////////////////////////////////////////////////////
+static void LOG_CWorld__FindObjectsKindaCollidingSectorList(unsigned int modelId)
+{
+    CBaseModelInfoSAInterface* pModelInfo = ((CBaseModelInfoSAInterface**)ARRAY_ModelInfo)[modelId];
+    if (!pModelInfo)
+    {
+        LogEvent(840, "Model info missing", "CWorld__FindObjectsKindaCollidingSectorList", SString("Corrupt model: %d", modelId), 5601);
+        return;
+    }
+
+    if (!pModelInfo->pColModel)
+    {
+        LogEvent(840, "Col model missing", "CWorld__FindObjectsKindaCollidingSectorList", SString("Corrupt col model: %d", modelId), 5601);
+    }
+}
+
+#define HOOKPOS_CWorld__FindObjectsKindaCollidingSectorList 0x56508C
+#define HOOKSIZE_CWorld__FindObjectsKindaCollidingSectorList 0xA
+static const unsigned int RETURN_CWorld__FindObjectsKindaCollidingSectorList = 0x565096;
+static const unsigned int RETURN_CWorld__FindObjectsKindaCollidingSectorList_SKIP = 0x5650C3;
+static void _declspec(naked) HOOK_CWorld__FindObjectsKindaCollidingSectorList()
+{
+    _asm {
+        mov eax, [edx*4+0xA9B0C8]   // CModelInfo::ms_modelInfoPtrs
+        test eax, eax
+        jz skip
+
+        mov ecx, [eax+0x14]         // m_pColModel
+        test ecx, ecx
+        jz skip
+
+        jmp RETURN_CWorld__FindObjectsKindaCollidingSectorList
+
+    skip:
+        pushad
+        push edx
+        call LOG_CWorld__FindObjectsKindaCollidingSectorList
+        add esp, 4
+        popad
+
+        jmp RETURN_CWorld__FindObjectsKindaCollidingSectorList_SKIP
+    }
+}
+
+////////////////////////////////////////////////////////////////////////
+// RpClumpForAllAtomics
+// 
+// Adds a nullptr check for the clump object pointer.
+//
+// >>> 0x749B70 | 8B 44 24 04 | mov  eax, [esp+arg_0]
+// >>> 0x749B74 | 53          | push ebx
+// >>> 0x749B75 | 55          | push ebp
+//     0x749B76 | 56          | push esi
+////////////////////////////////////////////////////////////////////////
+#define HOOKPOS_RpClumpForAllAtomics         0x749B70
+#define HOOKSIZE_RpClumpForAllAtomics        6
+static DWORD CONTINUE_RpClumpForAllAtomics = 0x749B76;
+
+static void _declspec(naked) HOOK_RpClumpForAllAtomics()
+{
+    _asm
+    {
+        mov     eax, [esp+4]    // RpClump* clump
+        test    eax, eax
+        jnz     continueAfterFixLocation
+        retn
+
+        continueAfterFixLocation:
+        push    ebx
+        push    ebp
+        jmp     CONTINUE_RpClumpForAllAtomics
+    }
+}
+
+////////////////////////////////////////////////////////////////////////
+// RpAnimBlendClumpGetFirstAssociation
+// 
+// Adds a nullptr check for the clump object pointer.
+//
+// >>> 0x4D6A70 | 8B 0D 78 F8 B5 00 | mov ecx, ds:_ClumpOffset
+//     0x4D6A76 | 8B 44 24 04       | mov eax, [esp+4]
+////////////////////////////////////////////////////////////////////////
+#define HOOKPOS_RpAnimBlendClumpGetFirstAssociation         0x4D6A70
+#define HOOKSIZE_RpAnimBlendClumpGetFirstAssociation        6
+static DWORD CONTINUE_RpAnimBlendClumpGetFirstAssociation = 0x4D6A76;
+
+static void _declspec(naked) HOOK_RpAnimBlendClumpGetFirstAssociation()
+{
+    _asm
+    {
+        mov     eax, [esp+4]            // RpClump* clump
+        test    eax, eax
+        jnz     continueAfterFixLocation
+        retn
+
+        continueAfterFixLocation:
+        mov     ecx, ds:[0xB5F878]
+        jmp     CONTINUE_RpAnimBlendClumpGetFirstAssociation
+    }
+}
+
+////////////////////////////////////////////////////////////////////////
+// CAnimManager::BlendAnimation
+// 
+// Adds a nullptr check for the clump object pointer.
+//
+// >>> 0x4D4610 | 83 EC 14          | sub esp, 14h
+// >>> 0x4D4613 | 8B 4C 24 18       | mov ecx, [esp+18h]
+//     0x4D4617 | 8B 15 34 EA B4 00 | mov edx, CAnimManager::ms_aAnimAssocGroups
+////////////////////////////////////////////////////////////////////////
+#define HOOKPOS_CAnimManager__BlendAnimation         0x4D4610
+#define HOOKSIZE_CAnimManager__BlendAnimation        7
+static DWORD CONTINUE_CAnimManager__BlendAnimation = 0x4D4617;
+
+static void _declspec(naked) HOOK_CAnimManager__BlendAnimation()
+{
+    _asm
+    {
+        mov     eax, [esp+4]            // RpClump* clump
+        test    eax, eax
+        jnz     continueAfterFixLocation
+        retn
+
+        continueAfterFixLocation:
+        sub     esp, 14h
+        mov     ecx, [esp+18h]
+        jmp     CONTINUE_CAnimManager__BlendAnimation
+    }
+}
+
+////////////////////////////////////////////////////////////////////////
+// FxSystemBP_c::Load
+//
+// Remove every FxEmitter without a main texture because the game logic expects AT LEAST
+// one texture at index 0 ("main texture").
+//
+//     0x5C0A14 | 5E                   | pop  esi
+// >>> 0x5C0A15 | 5D                   | pop  ebp
+// >>> 0x5C0A16 | 32 C0                | xor  al, al
+// >>> 0x5C0A18 | 5B                   | pop  ebx
+// >>> 0x5C0A19 | 64 89 0D 00 00 00 00 | mov  large fs:0, ecx
+// >>> 0x5C0A20 | 81 C4 E8 05 00 00    | add  esp, 5E8h
+// >>> 0x5C0A26 | C2 0C 00             | retn 0Ch
+////////////////////////////////////////////////////////////////////////
+#define HOOKPOS_FxSystemBP_c__Load  0x5C0A15
+#define HOOKSIZE_FxSystemBP_c__Load 19
+
+static void _cdecl POST_PROCESS_FxSystemBP_c__Load(CFxSystemBPSAInterface* blueprint)
+{
+    if (!blueprint->cNumOfPrims)
+        return;
+
+    char count = blueprint->cNumOfPrims;
+    char last = count - 1;
+
+    for (char i = last; i >= 0; i--)
+    {
+        if (blueprint->pPrims[i]->m_apTextures[0])
+            continue;
+
+        blueprint->pPrims[i] = nullptr;
+        --count;
+
+        if (i != last)
+        {
+            std::swap(blueprint->pPrims[i], blueprint->pPrims[last]);
+            --last;
+        }
+    }
+
+    if (blueprint->cNumOfPrims != count)
+    {
+        OnCrashAverted(33);
+        blueprint->cNumOfPrims = count;
+    }
+}
+
+static void _declspec(naked) HOOK_FxSystemBP_c__Load()
+{
+    _asm
+    {
+        pushad
+        push    ebp
+        call    POST_PROCESS_FxSystemBP_c__Load
+        add     esp, 4
+        popad
+
+        pop     ebp
+        xor     al, al
+        pop     ebx
+    //  mov     large fs:0, ecx
+        add     esp, 5E8h
+        retn    0Ch
+    }
+}
+
+////////////////////////////////////////////////////////////////////////
+// FxPrim_c::Enable
+//
+// Add a null-pointer check for the ecx pointer. This hook is a side-effect of the hook for
+// FxSystemBP_c::Load above.
+//
+// >>> 0x4A9F50 | 8A 44 24 04 | mov  al, [esp+4]
+// >>> 0x4A9F54 | 88 41 0C    | mov  [ecx+0xC], al
+// >>> 0x4A9F57 | C2 04 00    | retn 4
+////////////////////////////////////////////////////////////////////////
+#define HOOKPOS_FxPrim_c__Enable  0x4A9F50
+#define HOOKSIZE_FxPrim_c__Enable 10
+
+static void _declspec(naked) HOOK_FxPrim_c__Enable()
+{
+    _asm
+    {
+        test    ecx, ecx
+        jz      returnFromFunction
+        mov     al, [esp+4]
+        mov     [ecx+0xC], al
+
+        returnFromFunction:
+        retn    4
+    }
+}
+
+////////////////////////////////////////////////////////////////////////
+// CFire::ProcessFire
+// 
+// GitHub #1757 (https://github.com/multitheftauto/mtasa-blue/issues/1757)
+// 
+// Null pointer to the attachedTo field in the CFire structure
+////////////////////////////////////////////////////////////////////////
+#define HOOKPOS_CFire_ProcessFire  0x53A6FC
+#define HOOKSIZE_CFire_ProcessFire 9
+static constexpr DWORD CONTINUE_CFire_ProcessFire = 0x53A705;
+static constexpr DWORD SKIP_CFire_ProcessFire = 0x53A69C;
+static void _declspec(naked) HOOK_CFire_ProcessFire()
+{
+    _asm
+    {
+        test byte ptr [esi], 1 // If the "active" flag has been set to 0, we skip processing attached entities
+        jz skip
+
+        mov ecx, [esi+10h]
+        mov eax, [ecx+590h]
+        jmp CONTINUE_CFire_ProcessFire
+
+        skip:
+        mov ecx, esi
+        jmp SKIP_CFire_ProcessFire
+    }
+}
+
 //////////////////////////////////////////////////////////////////////////////////////////
 //
 // Setup hooks for CrashFixHacks
 //
-//////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////
 void CMultiplayerSA::InitHooks_CrashFixHacks()
 {
     EZHookInstall(CrashFix_Misc1);
@@ -1843,6 +2143,13 @@ void CMultiplayerSA::InitHooks_CrashFixHacks()
     EZHookInstall(CVehicleModelInfo__LoadVehicleColours_1);
     EZHookInstall(CVehicleModelInfo__LoadVehicleColours_2);
     EZHookInstall(CPlaceName__Process);
+    EZHookInstall(CWorld__FindObjectsKindaCollidingSectorList);
+    EZHookInstall(RpClumpForAllAtomics);
+    EZHookInstall(RpAnimBlendClumpGetFirstAssociation);
+    EZHookInstall(CAnimManager__BlendAnimation);
+    EZHookInstall(FxSystemBP_c__Load);
+    EZHookInstall(FxPrim_c__Enable);
+    EZHookInstall(CFire_ProcessFire);
 
     // Install train crossing crashfix (the temporary variable is required for the template logic)
     void (*temp)() = HOOK_TrainCrossingBarrierCrashFix<RETURN_CObject_Destructor_TrainCrossing_Check, RETURN_CObject_Destructor_TrainCrossing_Invalid>;

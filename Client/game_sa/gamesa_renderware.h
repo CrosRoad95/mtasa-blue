@@ -12,13 +12,9 @@
 
 #pragma once
 
-#define WIN32_LEAN_AND_MEAN
-
 #include <game/RenderWare.h>
-#include <windows.h>
-#include <stdio.h>
 
-class CColModelSAInterface;
+struct CColModelSAInterface;
 
 /*****************************************************************************/
 /** Renderware functions                                                    **/
@@ -42,7 +38,9 @@ typedef RwFrame*(__cdecl* RwFrameAddChild_t)(RwFrame* parent, RwFrame* child);
 typedef RwFrame*(__cdecl* RwFrameRemoveChild_t)(RwFrame* child);
 typedef RwFrame*(__cdecl* RwFrameForAllObjects_t)(RwFrame* frame, void* callback, void* data);
 typedef RwFrame*(__cdecl* RwFrameTranslate_t)(RwFrame* frame, const RwV3d* v, RwTransformOrder order);
+typedef RwFrame*(__cdecl* RwFrameTransform_t)(RwFrame* frame, const RwMatrix* m, RwOpCombineType combine);
 typedef RwFrame*(__cdecl* RwFrameScale_t)(RwFrame* frame, const RwV3d* v, RwTransformOrder order);
+typedef RwFrame*(__cdecl* RwFrameUpdateObjects_t)(RwFrame*);
 typedef RwFrame*(__cdecl* RwFrameCreate_t)();
 typedef int(__cdecl* RwFrameDestroy_t)(RwFrame* frame);
 typedef RwFrame*(__cdecl* RwFrameSetIdentity_t)(RwFrame* frame);
@@ -72,6 +70,7 @@ typedef RwTexture*(__cdecl* RwTexDictionaryAddTexture_t)(RwTexDictionary* dict, 
 typedef RwTexDictionary*(__cdecl* RwTexDictionaryGetCurrent_t)();
 typedef RwTexture*(__cdecl* RwTexDictionaryFindNamedTexture_t)(RwTexDictionary* dict, const char* name);
 typedef void(__cdecl* RpPrtStdGlobalDataSetStreamEmbedded_t)(void* value);
+typedef RpClump*(__cdecl* RpClumpRender_t)(RpClump* clump);
 typedef RpWorld*(__cdecl* RpWorldAddAtomic_t)(RpWorld* world, RpAtomic* atomic);
 typedef RpWorld*(__cdecl* RpWorldAddClump_t)(RpWorld* world, RpClump* clump);
 typedef RpWorld*(__cdecl* RpWorldAddLight_t)(RpWorld* world, RpLight* light);
@@ -101,6 +100,11 @@ typedef RwRaster*(__cdecl* RwRasterLock_t)(RwRaster* raster, unsigned char level
 typedef RwRaster*(__cdecl* RwRasterCreate_t)(int width, int height, int depth, int flags);
 typedef RwTexture*(__cdecl* RwTextureCreate_t)(RwRaster* raster);
 typedef RpMaterial*(__cdecl* RpMaterialSetTexture_t)(RpMaterial* mat, RwTexture* tex);
+typedef RpHAnimHierarchy*(__cdecl* GetAnimHierarchyFromClump_t)(RpClump*);
+typedef RpHAnimHierarchy*(__cdecl* GetAnimHierarchyFromSkinClump_t)(RpClump*);
+typedef int(__cdecl* RpHAnimIDGetIndex_t)(RpHAnimHierarchy*, int);
+typedef RwMatrix*(__cdecl* RpHAnimHierarchyGetMatrixArray_t)(RpHAnimHierarchy*);
+typedef RtQuat*(__cdecl* RtQuatRotate_t)(RtQuat* quat, const RwV3d* axis, float angle, RwOpCombineType combineOp);
 
 /*****************************************************************************/
 /** Renderware function mappings                                            **/
@@ -123,6 +127,7 @@ RWFUNC(RwStreamSkip_t RwStreamSkip, (RwStreamSkip_t)0xDEAD)
 RWFUNC(RpClumpDestroy_t RpClumpDestroy, (RpClumpDestroy_t)0xDEAD)
 RWFUNC(RpClumpGetNumAtomics_t RpClumpGetNumAtomics, (RpClumpGetNumAtomics_t)0xDEAD)
 RWFUNC(RwFrameTranslate_t RwFrameTranslate, (RwFrameTranslate_t)0xDEAD)
+RWFUNC(RwFrameTransform_t RwFrameTransform, (RwFrameTransform_t)0xDEAD)
 RWFUNC(RpClumpForAllAtomics_t RpClumpForAllAtomics, (RpClumpForAllAtomics_t)0xDEAD)
 RWFUNC(RwFrameAddChild_t RwFrameAddChild, (RwFrameAddChild_t)0xDEAD)
 RWFUNC(RpClumpAddAtomic_t RpClumpAddAtomic, (RpClumpAddAtomic_t)0xDEAD)
@@ -136,6 +141,7 @@ RWFUNC(RwTexDictionaryAddTexture_t RwTexDictionaryAddTexture, (RwTexDictionaryAd
 RWFUNC(RwTexDictionaryStreamWrite_t RwTexDictionaryStreamWrite, (RwTexDictionaryStreamWrite_t)0xDEAD)
 RWFUNC(rwD3D9NativeTextureRead_t rwD3D9NativeTextureRead, (rwD3D9NativeTextureRead_t)0xDEAD)
 RWFUNC(RpPrtStdGlobalDataSetStreamEmbedded_t RpPrtStdGlobalDataSetStreamEmbedded, (RpPrtStdGlobalDataSetStreamEmbedded_t)0xDEAD)
+RWFUNC(RpClumpRender_t RpClumpRender, (RpClumpRender_t)0xDEAD)
 RWFUNC(RpClumpRemoveAtomic_t RpClumpRemoveAtomic, (RpClumpRemoveAtomic_t)0xDEAD)
 RWFUNC(RpAtomicClone_t RpAtomicClone, (RpAtomicClone_t)0xDEAD)
 RWFUNC(RwTexDictionaryFindNamedTexture_t RwTexDictionaryFindNamedTexture, (RwTexDictionaryFindNamedTexture_t)0xDEAD)
@@ -167,6 +173,7 @@ RWFUNC(RwIm3DEnd_t RwIm3DEnd, (RwIm3DEnd_t)0xDEAD)
 RWFUNC(RwMatrixInvert_t RwMatrixInvert, (RwMatrixInvert_t)0xDEAD)
 RWFUNC(RpWorldAddClump_t RpWorldAddClump, (RpWorldAddClump_t)0xDEAD)
 RWFUNC(RwFrameScale_t RwFrameScale, (RwFrameScale_t)0xDEAD)
+RWFUNC(RwFrameUpdateObjects_t RwFrameUpdateObjects, (RwFrameUpdateObjects_t)0xDAED)
 RWFUNC(RwV3dTransformVector_t RwV3dTransformVector, (RwV3dTransformVector_t)0xDEAD)
 RWFUNC(RpLightCreate_t RpLightCreate, (RpLightCreate_t)0xDEAD)
 RWFUNC(RpClumpAddLight_t RpClumpAddLight, (RpClumpAddLight_t)0xDEAD)
@@ -183,6 +190,11 @@ RWFUNC(RwRasterLock_t RwRasterLock, (RwRasterLock_t)0xDEAD)
 RWFUNC(RwRasterCreate_t RwRasterCreate, (RwRasterCreate_t)0xDEAD)
 RWFUNC(RwTextureCreate_t RwTextureCreate, (RwTextureCreate_t)0xDEAD)
 RWFUNC(RpMaterialSetTexture_t RpMaterialSetTexture, (RpMaterialSetTexture_t)0xDEAD)
+RWFUNC(GetAnimHierarchyFromClump_t GetAnimHierarchyFromClump, (GetAnimHierarchyFromClump_t)0xDEAD)
+RWFUNC(GetAnimHierarchyFromSkinClump_t GetAnimHierarchyFromSkinClump, (GetAnimHierarchyFromSkinClump_t)0xDEAD)
+RWFUNC(RpHAnimIDGetIndex_t RpHAnimIDGetIndex, (RpHAnimIDGetIndex_t)0xDEAD)
+RWFUNC(RpHAnimHierarchyGetMatrixArray_t RpHAnimHierarchyGetMatrixArray, (RpHAnimHierarchyGetMatrixArray_t)0xDEAD)
+RWFUNC(RtQuatRotate_t RtQuatRotate, (RtQuatRotate_t)0xDEAD)
 
 /*****************************************************************************/
 /** GTA function definitions and mappings                                   **/

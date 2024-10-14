@@ -10,20 +10,20 @@
  *****************************************************************************/
 
 #include "StdInc.h"
+#include "CLuaVoiceDefs.h"
+#include "CScriptArgReader.h"
 
 void CLuaVoiceDefs::LoadFunctions()
 {
-    std::map<const char*, lua_CFunction> functions{
+    constexpr static const std::pair<const char*, lua_CFunction> functions[]{
         {"isVoiceEnabled", IsVoiceEnabled},
         {"setPlayerVoiceBroadcastTo", SetPlayerVoiceBroadcastTo},
         {"setPlayerVoiceIgnoreFrom", setPlayerVoiceIgnoreFrom},
     };
 
     // Add functions
-    for (const auto& pair : functions)
-    {
-        CLuaCFunctions::AddFunction(pair.first, pair.second);
-    }
+    for (const auto& [name, func] : functions)
+        CLuaCFunctions::AddFunction(name, func);
 }
 
 int CLuaVoiceDefs::IsVoiceEnabled(lua_State* luaVM)

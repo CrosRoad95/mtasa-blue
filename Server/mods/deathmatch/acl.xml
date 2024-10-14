@@ -21,6 +21,7 @@
       <acl name="Admin" />
       <acl name="RPC" />
       <object name="resource.admin" />
+      <object name="resource.admin2" />
       <object name="resource.webadmin" />
       <object name="resource.acpanel" />
    </group>
@@ -33,6 +34,7 @@
    </group>
    <group name="RPC">
       <acl name="RPC" />
+      <object name="resource.ip2c" />
    </group>
    <group name="MapEditor">
       <acl name="Default" />
@@ -113,6 +115,8 @@
       <right name="function.stopResource" access="false" />
       <right name="function.restartResource" access="false" />
       <right name="function.createResource" access="false" />
+      <right name="function.renameResource" access="false" />
+      <right name="function.deleteResource" access="false" />
       <right name="function.copyResource" access="false" />
       <right name="function.addResourceMap" access="false" />
       <right name="function.addResourceConfig" access="false" />
@@ -137,6 +141,8 @@
       <right name="function.updateResourceACLRequest" access="false" />
       <right name="function.shutdown" access="false" />
       <right name="function.setPlayerScriptDebugLevel" access="false" />
+      <right name="function.loadstring" access="false" />
+      <right name="function.load" access="false" />
    </acl>
    <acl name="Moderator">
       <right name="general.ModifyOtherObjects" access="false" />
@@ -157,6 +163,8 @@
       <right name="function.addBan" access="true" />
       <right name="function.startResource" access="true" />
       <right name="function.stopResource" access="true" />
+      <right name="function.renameResource" access="false" />
+      <right name="function.deleteResource" access="false" />
       <right name="function.restartResource" access="true" />
       <right name="function.refreshResources" access="true" />
       <right name="function.redirectPlayer" access="true" />
@@ -177,12 +185,11 @@
       <right name="command.unloadmodule" access="true" />
       <right name="command.reloadmodule" access="true" />
       <right name="command.addaccount" access="true" />
-      <right name="command.delaccount" access="true" />
-      <right name="command.chgpass" access="true" />
       <right name="function.addAccount" access="true" />
-      <right name="function.removeAccount" access="true" />
       <right name="function.setAccountName" access="true" />
       <right name="function.setAccountPassword" access="true" />
+      <right name="function.renameResource" access="true" />
+      <right name="function.deleteResource" access="true" />
    </acl>
    <acl name="Admin">
       <right name="general.ModifyOtherObjects" access="true" />
@@ -198,6 +205,9 @@
       <right name="command.aclrequest" access="true" />
       <right name="command.authserial" access="true" />
       <right name="command.reloadacl" access="true" />
+      <right name="command.stopall" access="true" />
+      <right name="command.delaccount" access="true" />
+      <right name="command.chgpass" access="true" />
       <right name="function.addBan" access="true" />
       <right name="function.setUnbanTime" access="true" />
       <right name="function.setBanAdmin" access="true" />
@@ -210,6 +220,8 @@
       <right name="function.getServerPassword" access="true" />
       <right name="function.createResource" access="true" />
       <right name="function.copyResource" access="true" />
+      <right name="function.renameResource" access="true" />
+      <right name="function.deleteResource" access="true" />
       <right name="function.addResourceMap" access="true" />
       <right name="function.addResourceConfig" access="true" />
       <right name="function.removeResourceFile" access="true" />
@@ -232,6 +244,7 @@
       <right name="function.updateResourceACLRequest" access="true" />
       <right name="function.shutdown" access="true" />
       <right name="function.setPlayerScriptDebugLevel" access="true" />
+      <right name="function.removeAccount" access="true" />
    </acl>
    <acl name="RPC">
       <right name="function.callRemote" access="true" />
@@ -253,6 +266,7 @@
       <right name="function.removeResourceDefaultSetting" access="true" />
       <right name="function.xmlLoadFile" access="true" />
       <right name="function.refreshResources" access="true" />
+      <right name="function.loadstring" access="true" />
    </acl>
    <acl name="raceACL">
       <right name="general.ModifyOtherObjects" access="true" />

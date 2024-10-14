@@ -10,6 +10,11 @@
  *****************************************************************************/
 
 #include "StdInc.h"
+#include "CPed.h"
+#include "CPedManager.h"
+#include "CLogger.h"
+#include "Utils.h"
+#include "CStaticFunctionDefinitions.h"
 
 char szBodyPartNameEmpty[] = "";
 struct SBodyPartName
@@ -74,6 +79,9 @@ CPed::CPed(CPedManager* pPedManager, CElement* pParent, unsigned short usModel) 
 
     m_bCollisionsEnabled = true;
 
+    m_pJackingVehicle = NULL;
+    m_nearPlayersList.reserve(20);
+
     // Add us to the Ped manager
     if (pPedManager)
     {
@@ -83,6 +91,23 @@ CPed::CPed(CPedManager* pPedManager, CElement* pParent, unsigned short usModel) 
 
 CPed::~CPed()
 {
+    // Abort any jacking process
+    if (m_pJackingVehicle)
+    {
+        if (m_uiVehicleAction == VEHICLEACTION_JACKING)
+        {
+            CPed* pOccupant = m_pJackingVehicle->GetOccupant(0);
+            if (pOccupant)
+            {
+                m_pJackingVehicle->SetOccupant(NULL, 0);
+                pOccupant->SetOccupiedVehicle(NULL, 0);
+                pOccupant->SetVehicleAction(VEHICLEACTION_NONE);
+            }
+        }
+        if (m_pJackingVehicle->GetJackingPed() == this)
+            m_pJackingVehicle->SetJackingPed(NULL);
+    }
+
     // Make sure we've no longer occupied any vehicle
     if (m_pVehicle)
     {
@@ -331,6 +356,17 @@ void CPed::SetWeaponTotalAmmo(unsigned short usTotalAmmo, unsigned char ucSlot)
     }
 }
 
+bool CPed::HasWeaponType(unsigned char ucWeaponType)
+{
+    for (unsigned char slot = 0; slot < WEAPON_SLOTS; slot++)
+    {
+        if (GetWeaponType(slot) == ucWeaponType)
+            return true;
+    }
+
+    return false;
+}
+
 float CPed::GetMaxHealth()
 {
     // TODO: Verify this formula
@@ -435,5 +471,88 @@ void CPed::SetSyncer(CPlayer* pPlayer)
 
         // Set it
         m_pSyncer = pPlayer;
+
+        // Check if we are in an enter/exit action
+        // We need to complete the process by warping the ped in or out, because the syncer changed
+        unsigned int uiAction = GetVehicleAction();
+        switch (uiAction)
+        {
+            case VEHICLEACTION_ENTERING:
+            {
+                CVehicle*     pVehicle = GetOccupiedVehicle();
+                unsigned char ucOccupiedSeat = static_cast<unsigned char>(GetOccupiedVehicleSeat());
+                // Does it have an occupant and is the occupant us?
+                if (pVehicle && (this == pVehicle->GetOccupant(ucOccupiedSeat)))
+                {
+                    // Warp us into vehicle
+                    CStaticFunctionDefinitions::WarpPedIntoVehicle(this, pVehicle, ucOccupiedSeat);
+                }
+            }
+
+            case VEHICLEACTION_EXITING:
+            {
+                CVehicle*     pVehicle = GetOccupiedVehicle();
+                unsigned char ucOccupiedSeat = GetOccupiedVehicleSeat();
+                // Does it have an occupant and is the occupant us?
+                if (pVehicle && (this == pVehicle->GetOccupant(ucOccupiedSeat)))
+                {
+                    // Warp us out of vehicle
+                    CStaticFunctionDefinitions::RemovePedFromVehicle(this);
+                }
+            }
+
+            case VEHICLEACTION_JACKING:
+            {
+                CVehicle* pVehicle = GetJackingVehicle();
+                if (pVehicle)
+                {
+                    // Warp us into vehicle in drivers seat
+                    // This will warp the existing driver out and reset both our and the jacked peds vehicle action
+                    CStaticFunctionDefinitions::WarpPedIntoVehicle(this, pVehicle, 0);
+                }
+            }
+        }
     }
+}
+
+void CPed::SetJackingVehicle(CVehicle* pVehicle)
+{
+    if (pVehicle == m_pJackingVehicle)
+        return;
+
+    // Remove old
+    if (m_pJackingVehicle)
+    {
+        CVehicle* pPrev = m_pJackingVehicle;
+        m_pJackingVehicle = NULL;
+        pPrev->SetJackingPed(NULL);
+    }
+
+    // Set new
+    m_pJackingVehicle = pVehicle;
+
+    if (m_pJackingVehicle)
+        m_pJackingVehicle->SetJackingPed(this);
+}
+
+void CPed::SetHasJetPack(bool bHasJetPack)
+{
+    if (m_bHasJetPack == bHasJetPack)
+        return;
+
+    m_bHasJetPack = bHasJetPack;
+
+    if (!bHasJetPack)
+        return;
+
+    // Set weapon slot to 0 if weapon is disabled with jetpack to avoid HUD and audio bugs
+    eWeaponType weaponType = static_cast<eWeaponType>(GetWeaponType(GetWeaponSlot()));
+    if (weaponType <= WEAPONTYPE_UNARMED)
+        return;
+
+    bool weaponEnabled;
+    CStaticFunctionDefinitions::GetJetpackWeaponEnabled(weaponType, weaponEnabled);
+
+    if (!weaponEnabled)
+        CStaticFunctionDefinitions::SetPedWeaponSlot(this, 0);
 }

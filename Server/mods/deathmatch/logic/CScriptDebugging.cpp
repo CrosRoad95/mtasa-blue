@@ -10,12 +10,13 @@
  *****************************************************************************/
 
 #include "StdInc.h"
+#include "CScriptDebugging.h"
+#include "packets/CDebugEchoPacket.h"
 
 extern CGame* g_pGame;
 
-CScriptDebugging::CScriptDebugging(CLuaManager* pLuaManager)
+CScriptDebugging::CScriptDebugging()
 {
-    m_pLuaManager = pLuaManager;
     m_uiLogFileLevel = 0;
     m_uiHtmlLogLevel = 0;
     m_pLogFile = NULL;
@@ -124,7 +125,8 @@ void CScriptDebugging::UpdateLogOutput()
             PrintLog(line.strText);
         }
         // Log to console
-        CLogger::LogPrintf("%s\n", line.strText.c_str());
+        CLogger::LogPrintf("%s", line.strText.c_str());
+        CLogger::LogPrintNoStamp("\n");
         // Tell the players
         Broadcast(CDebugEchoPacket(line.strText, line.uiMinimumDebugLevel, line.ucRed, line.ucGreen, line.ucBlue), line.uiMinimumDebugLevel);
     }
@@ -144,12 +146,13 @@ void CScriptDebugging::PrintLog(const char* szText)
 void CScriptDebugging::Broadcast(const CPacket& Packet, unsigned int uiMinimumDebugLevel)
 {
     // Tell everyone we log to about it
-    list<CPlayer*>::const_iterator iter = m_Players.begin();
-    for (; iter != m_Players.end(); iter++)
+    for (const auto& pPlayer : m_Players)
     {
-        if ((*iter)->m_uiScriptDebugLevel >= uiMinimumDebugLevel)
+        bool sufficientDebugLevel = CheckForSufficientDebugLevel(pPlayer->m_uiScriptDebugLevel, uiMinimumDebugLevel);
+
+        if (sufficientDebugLevel)
         {
-            (*iter)->Send(Packet);
+            pPlayer->Send(Packet);
         }
     }
 }
