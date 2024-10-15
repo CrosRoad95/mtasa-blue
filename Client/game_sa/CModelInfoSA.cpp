@@ -1531,6 +1531,11 @@ void CModelInfoSA::RestoreOriginalModel()
     m_pCustomClump = NULL;
 }
 
+CColModel* CModelInfoSA::GetColModel()
+{
+    return m_pCustomColModel;
+}
+
 void CModelInfoSA::SetColModel(CColModel* pColModel)
 {
     // Grab the interfaces

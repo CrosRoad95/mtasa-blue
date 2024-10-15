@@ -106,6 +106,7 @@
 #include <CWeaponNames.h>
 #include <CVehicleNames.h>
 #include <CModelRenderer.h>
+#include <CCustomCollision.h>
 #include <lua/CLuaCFunctions.h>
 #include <lua/CLuaArguments.h>
 #include <lua/CLuaMain.h>

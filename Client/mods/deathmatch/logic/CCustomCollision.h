@@ -48,27 +48,24 @@ class CCustomCollision : public CCustomCollisionInterface
 public:
     CCustomCollision();
     ~CCustomCollision();
-    CColModelSAInterface* GetCurrentCollision(CObject* pObject, bool bSkipScaled = false);
-    CColModelSAInterface* GetCurrentCollision(CEntitySAInterface* pEntitySA, bool bSkipScaled = false);
+    CColModel*            GetCurrentCollision(CObject* pObject, bool bSkipScaled = false);
     void                  SetObjectScale(CObject* pObject, CVector scale);
-    bool                  SetObjectCollision(CEntitySAInterface* pEntitySA, CColModelSAInterface* pColModelSA);
-    bool                  SetObjectScaledCollision(CEntitySAInterface* pEntitySA, CColModelSAInterface* pColModelSA);
+    bool                  SetObjectCollision(CObject* pObject, CColModel* pColModelSA);
+    bool                  SetObjectScaledCollision(CObject* pObject, CColModel* pColModelSA);
+    bool                  HasCustomCollision(CEntity* pEntity);
+    bool                  RemoveCustomCollision(CEntity* pEntity);
     void                  DrawCollisionDebug(CObject* pObject);
 
 private:
-    CColModelSAInterface* GetOriginalColModel(CEntitySAInterface* pEntity);
+    CColModel*            GetOriginalColModel(CEntity* pEntity);
     bool                  SaveOriginalCollision(WORD model);
-    CColModelSAInterface* CopyColModel(CColModelSAInterface* pColModel);
-    void                  ScaleCollision(CColModelSAInterface* pColModel, const CVector& scale);
+    CColModel*            CopyColModel(CColModel* pColModel);
+    void                  ScaleCollision(CColModel* pColModel, const CVector& scale);
 
-    bool HasCustomCollision(CEntitySAInterface* pEntitySA);
-    bool RemoveCustomCollision(CEntitySAInterface* pEntitySA);
-
-    std::map<DWORD, CColModelSAInterface*> m_mapOriginalCollisions;                // model = coldata
-    std::map<DWORD, CColModelSAInterface*> m_mapCustomScaledCollisions;            // object = coldata
-    std::map<DWORD, CColModelSAInterface*> m_mapCustomCollisions;                  // object = coldata
+    std::map<DWORD, CColModel*>            m_mapOriginalCollisions;                // model = coldata
+    std::map<DWORD, CColModel*>            m_mapCustomScaledCollisions;            // object = coldata
+    std::map<DWORD, CColModel*>            m_mapCustomCollisions;                  // object = coldata
 
     // collision => scale = scaled collision
-    std::map<CColModelSAInterface*, std::map<CVector, CColModelSAInterface*>> m_mapScaledCollisions =
-        std::map<CColModelSAInterface*, std::map<CVector, CColModelSAInterface*>>();
+    std::map<CColModel*, std::map<CVector, CColModel*>> m_mapScaledCollisions = std::map<CColModel*, std::map<CVector, CColModel*>>();
 };

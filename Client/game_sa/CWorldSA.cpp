@@ -99,8 +99,9 @@ CColModelSAInterface* GetCollision(CObject* pObject)
 {
     //g_pCore->GetCustomCollision()->DrawCollisionDebug(pObject);
 
-    CColModelSAInterface* pColModel = g_pCore->GetCustomCollision()->GetCurrentCollision(pObject);
-    return pColModel;
+    //CColModelSAInterface* pColModel = g_pCore->GetCustomCollision()->GetCurrentCollision(pObject);
+    return nullptr;
+    //return pColModel;
 }
 
 bool                  bGotReplaced = false;
@@ -138,11 +139,11 @@ void GetIsTouching(CEntitySAInterface* pEntity, int posn, float radius)
         pObject = pObjectClientEntity ? pObjectClientEntity->pEntity : nullptr;
         if (pObject != nullptr)
         {
-            if (g_pCore->GetCustomCollision()->HasCustomCollision(pObject->GetInterface()))
+            /*if (g_pCore->GetCustomCollision()->HasCustomCollision(pObject->GetInterface()))
             {
                 isTouchingCustomCollision = true;
                 return;
-            }
+            }*/
         }
     }
     isTouchingCustomCollision = false;

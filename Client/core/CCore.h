@@ -41,7 +41,7 @@ class CDiscordInterface;
 #include <ijsify.h>
 #include <core/CWebCoreInterface.h>
 #include "CTrayIcon.h"
-#include "CCustomCollision.h"
+#include "core/CCustomCollisionInterface.h"
 
 #define DIRECTINPUT_VERSION 0x0800
 #include <dinput.h>
@@ -105,7 +105,6 @@ public:
     CWebCoreInterface*                 GetWebCore();
     CTrayIconInterface*                GetTrayIcon() { return m_pTrayIcon; };
     std::shared_ptr<CDiscordInterface> GetDiscord();
-    CCustomCollisionInterface*         GetCustomCollision() { return m_pCustomCollision; }
 
 
     void SaveConfig(bool bWaitUntilFinished = false);
@@ -312,7 +311,6 @@ private:
     CWebCoreInterface*                    m_pWebCore = nullptr;
     CTrayIcon*                            m_pTrayIcon;
     std::shared_ptr<CDiscordRichPresence> m_pDiscordRichPresence;
-    CCustomCollision*                     m_pCustomCollision;
 
     // Hook interfaces.
     CMessageLoopHook*        m_pMessageLoopHook;

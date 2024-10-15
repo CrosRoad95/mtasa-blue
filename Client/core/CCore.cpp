@@ -166,9 +166,6 @@ CCore::CCore()
 
     // Create discord rich presence
     m_pDiscordRichPresence = std::shared_ptr<CDiscordRichPresence>(new CDiscordRichPresence());
-
-    // Custom per element collision class
-    m_pCustomCollision = new CCustomCollision();
 }
 
 CCore::~CCore()
@@ -182,7 +179,6 @@ CCore::~CCore()
     // Destroy tray icon
     delete m_pTrayIcon;
 
-    delete m_pCustomCollision;
 
     // This will set the GTA volume to the GTA volume value in the settings,
     // and is not affected by the master volume setting.

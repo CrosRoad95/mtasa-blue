@@ -4125,7 +4125,7 @@ bool CStaticFunctionDefinitions::SetObjectCustomCollision(CClientEntity& Entity,
     if (IS_OBJECT(&Entity))
     {
         CDeathmatchObject& Object = static_cast<CDeathmatchObject&>(Entity);
-        Object.SetCustomCollision(pColModel->GetColModel()->GetInterface());
+        Object.SetCustomCollision(pColModel->GetColModel());
         return true;
     }
 

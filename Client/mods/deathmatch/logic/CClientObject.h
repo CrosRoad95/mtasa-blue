@@ -85,7 +85,7 @@ public:
     void          GetScale(CVector& vecScale) const;
     void          SetScale(const CVector& vecScale);
     void          SetCollisionScale(const CVector& vecScale);
-    void          SetCustomCollision(CColModelSAInterface* pColModelSA);
+    void          SetCustomCollision(CColModel* pColModel);
 
     bool IsCollisionEnabled() { return m_bUsesCollision; };
     void SetCollisionEnabled(bool bCollisionEnabled);
@@ -146,7 +146,7 @@ protected:
     unsigned char m_ucAlpha;
     CVector       m_vecScale;
     CVector       m_vecCollisionScale;
-    CColModelSAInterface* m_pColModelSA = nullptr;
+    CColModel*    m_pColModelSA = nullptr;
     float         m_fHealth;
     bool          m_bBreakingDisabled;
     bool          m_bBeingRespawned;

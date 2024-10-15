@@ -220,6 +220,7 @@ public:
     virtual bool SetCustomModel(RpClump* pClump) = 0;
     virtual void RestoreOriginalModel() = 0;
     virtual void SetColModel(CColModel* pColModel) = 0;
+    virtual CColModel* GetColModel() = 0;
     virtual void RestoreColModel() = 0;
 
     // Increases the collision slot reference counter for this model

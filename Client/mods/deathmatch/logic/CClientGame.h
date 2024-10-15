@@ -318,6 +318,7 @@ public:
     CResourceFileDownloadManager* GetResourceFileDownloadManager() { return m_pResourceFileDownloadManager; }
 
     CModelRenderer* GetModelRenderer() const noexcept { return m_pModelRenderer.get(); }
+    CCustomCollision* GetCustomCollision() const noexcept { return m_pCustomCollision.get(); }
 
     SharedUtil::CAsyncTaskScheduler* GetAsyncTaskScheduler() { return m_pAsyncTaskScheduler; }
 
@@ -713,6 +714,8 @@ private:
     CResourceFileDownloadManager* m_pResourceFileDownloadManager;
 
     std::unique_ptr<CModelRenderer> m_pModelRenderer;
+    std::unique_ptr<CCustomCollision> m_pCustomCollision;
+    ;
 
     // Revised facilities
     CServer m_Server;
