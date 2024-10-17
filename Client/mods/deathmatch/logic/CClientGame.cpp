@@ -254,6 +254,8 @@ CClientGame::CClientGame(bool bLocalPlay) : m_ServerInfo(new CServerInfo())
     // 3D model renderer
     m_pModelRenderer = std::make_unique<CModelRenderer>();
 
+    m_pCustomCollision = std::make_unique<CCustomCollision>();
+
     // Register the message and the net packet handler
     g_pMultiplayer->SetPreWeaponFireHandler(CClientGame::PreWeaponFire);
     g_pMultiplayer->SetPostWeaponFireHandler(CClientGame::PostWeaponFire);

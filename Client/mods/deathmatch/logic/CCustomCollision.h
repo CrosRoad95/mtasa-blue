@@ -52,8 +52,8 @@ public:
     void                  SetObjectScale(CObject* pObject, CVector scale);
     bool                  SetObjectCollision(CObject* pObject, CColModel* pColModelSA);
     bool                  SetObjectScaledCollision(CObject* pObject, CColModel* pColModelSA);
-    bool                  HasCustomCollision(CEntity* pEntity);
-    bool                  RemoveCustomCollision(CEntity* pEntity);
+    bool                  HasCustomCollision(CObject* pEntity);
+    bool                  RemoveCustomCollision(CObject* pEntity);
     void                  DrawCollisionDebug(CObject* pObject);
 
 private:

@@ -430,7 +430,7 @@ public:
     // Custom collision related functions
     bool SetCustomModel(RpClump* pClump) override;
     void RestoreOriginalModel() override;
-    CColModel* GetColModel() override;
+    CColModelSAInterface* GetColModel() override;
     void SetColModel(CColModel* pColModel) override;
     void RestoreColModel() override;
     void MakeCustomModel() override;

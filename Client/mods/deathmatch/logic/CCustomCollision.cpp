@@ -18,7 +18,6 @@
 
 CCustomCollision::CCustomCollision()
 {
-
 }
 
 CCustomCollision::~CCustomCollision()
@@ -168,15 +167,16 @@ void CCustomCollision::DrawCollisionDebug(CObject* pObject)
     CColSphereSA* pColSphere;
     CVector       spherePos;
 
+    auto pGraphics = g_pCore->GetGraphics();
     for (int i = 0; i < m_data->m_numTriangles; i++)
     {
         CColTriangleSA* pColTriangle = &m_data->m_triangles[i];
         trianglePosition[0] = m_data->m_vertices[pColTriangle->m_indices[0]].getVector() + vecPosition;
         trianglePosition[1] = m_data->m_vertices[pColTriangle->m_indices[1]].getVector() + vecPosition;
         trianglePosition[2] = m_data->m_vertices[pColTriangle->m_indices[2]].getVector() + vecPosition;
-        g_pCore->GetGraphics()->DrawLine3DQueued(trianglePosition[0], trianglePosition[1], fLineWidth, color);
-        g_pCore->GetGraphics()->DrawLine3DQueued(trianglePosition[1], trianglePosition[2], fLineWidth, color);
-        g_pCore->GetGraphics()->DrawLine3DQueued(trianglePosition[2], trianglePosition[0], fLineWidth, color);
+        pGraphics->DrawLine3DQueued(trianglePosition[0], trianglePosition[1], fLineWidth, color);
+        pGraphics->DrawLine3DQueued(trianglePosition[1], trianglePosition[2], fLineWidth, color);
+        pGraphics->DrawLine3DQueued(trianglePosition[2], trianglePosition[0], fLineWidth, color);
     }
 
     for (int i = 0; i < m_data->m_numBoxes; i++)
@@ -186,29 +186,29 @@ void CCustomCollision::DrawCollisionDebug(CObject* pObject)
         posMax = pColBox->m_vecMax + vecPosition;
 
         // vertical lines
-        g_pCore->GetGraphics()->DrawLine3DQueued(CVector(posMin.fX, posMin.fY, posMin.fZ), CVector(posMin.fX, posMin.fY, posMax.fZ), fLineWidth, color);
-        g_pCore->GetGraphics()->DrawLine3DQueued(CVector(posMax.fX, posMin.fY, posMin.fZ), CVector(posMax.fX, posMin.fY, posMax.fZ), fLineWidth, color);
-        g_pCore->GetGraphics()->DrawLine3DQueued(CVector(posMax.fX, posMax.fY, posMin.fZ), CVector(posMax.fX, posMax.fY, posMax.fZ), fLineWidth, color);
-        g_pCore->GetGraphics()->DrawLine3DQueued(CVector(posMin.fX, posMax.fY, posMin.fZ), CVector(posMin.fX, posMax.fY, posMax.fZ), fLineWidth, color);
+        pGraphics->DrawLine3DQueued(CVector(posMin.fX, posMin.fY, posMin.fZ), CVector(posMin.fX, posMin.fY, posMax.fZ), fLineWidth, color);
+        pGraphics->DrawLine3DQueued(CVector(posMax.fX, posMin.fY, posMin.fZ), CVector(posMax.fX, posMin.fY, posMax.fZ), fLineWidth, color);
+        pGraphics->DrawLine3DQueued(CVector(posMax.fX, posMax.fY, posMin.fZ), CVector(posMax.fX, posMax.fY, posMax.fZ), fLineWidth, color);
+        pGraphics->DrawLine3DQueued(CVector(posMin.fX, posMax.fY, posMin.fZ), CVector(posMin.fX, posMax.fY, posMax.fZ), fLineWidth, color);
 
         // one corner
-        g_pCore->GetGraphics()->DrawLine3DQueued(CVector(posMin.fX, posMin.fY, posMin.fZ), CVector(posMin.fX, posMax.fY, posMin.fZ), fLineWidth, color);
-        g_pCore->GetGraphics()->DrawLine3DQueued(CVector(posMin.fX, posMin.fY, posMin.fZ), CVector(posMax.fX, posMin.fY, posMin.fZ), fLineWidth, color);
-        g_pCore->GetGraphics()->DrawLine3DQueued(CVector(posMin.fX, posMin.fY, posMax.fZ), CVector(posMin.fX, posMax.fY, posMax.fZ), fLineWidth, color);
-        g_pCore->GetGraphics()->DrawLine3DQueued(CVector(posMin.fX, posMin.fY, posMax.fZ), CVector(posMax.fX, posMin.fY, posMax.fZ), fLineWidth, color);
+        pGraphics->DrawLine3DQueued(CVector(posMin.fX, posMin.fY, posMin.fZ), CVector(posMin.fX, posMax.fY, posMin.fZ), fLineWidth, color);
+        pGraphics->DrawLine3DQueued(CVector(posMin.fX, posMin.fY, posMin.fZ), CVector(posMax.fX, posMin.fY, posMin.fZ), fLineWidth, color);
+        pGraphics->DrawLine3DQueued(CVector(posMin.fX, posMin.fY, posMax.fZ), CVector(posMin.fX, posMax.fY, posMax.fZ), fLineWidth, color);
+        pGraphics->DrawLine3DQueued(CVector(posMin.fX, posMin.fY, posMax.fZ), CVector(posMax.fX, posMin.fY, posMax.fZ), fLineWidth, color);
 
         // second corner
-        g_pCore->GetGraphics()->DrawLine3DQueued(CVector(posMax.fX, posMax.fY, posMin.fZ), CVector(posMin.fX, posMax.fY, posMin.fZ), fLineWidth, color);
-        g_pCore->GetGraphics()->DrawLine3DQueued(CVector(posMax.fX, posMax.fY, posMin.fZ), CVector(posMax.fX, posMin.fY, posMin.fZ), fLineWidth, color);
-        g_pCore->GetGraphics()->DrawLine3DQueued(CVector(posMax.fX, posMax.fY, posMax.fZ), CVector(posMin.fX, posMax.fY, posMax.fZ), fLineWidth, color);
-        g_pCore->GetGraphics()->DrawLine3DQueued(CVector(posMax.fX, posMax.fY, posMax.fZ), CVector(posMax.fX, posMin.fY, posMax.fZ), fLineWidth, color);
+        pGraphics->DrawLine3DQueued(CVector(posMax.fX, posMax.fY, posMin.fZ), CVector(posMin.fX, posMax.fY, posMin.fZ), fLineWidth, color);
+        pGraphics->DrawLine3DQueued(CVector(posMax.fX, posMax.fY, posMin.fZ), CVector(posMax.fX, posMin.fY, posMin.fZ), fLineWidth, color);
+        pGraphics->DrawLine3DQueued(CVector(posMax.fX, posMax.fY, posMax.fZ), CVector(posMin.fX, posMax.fY, posMax.fZ), fLineWidth, color);
+        pGraphics->DrawLine3DQueued(CVector(posMax.fX, posMax.fY, posMax.fZ), CVector(posMax.fX, posMin.fY, posMax.fZ), fLineWidth, color);
     }
 
     for (int i = 0; i < m_data->m_numSpheres; i++)
     {
         pColSphere = &m_data->m_spheres[i];
         spherePos = pColSphere->m_center + vecPosition;
-        g_pCore->GetGraphics()->DrawWiredSphere(spherePos, pColSphere->m_radius, SColorARGB(255, 0, 0, 255), fLineWidth, 2);
+        pGraphics->DrawWiredSphere(spherePos, pColSphere->m_radius, SColorARGB(255, 0, 0, 255), fLineWidth, 2);
     }
 
     // Bounding Box
@@ -216,31 +216,31 @@ void CCustomCollision::DrawCollisionDebug(CObject* pObject)
     posMax = colModel->m_bounds.m_vecMax + vecPosition;
 
     // vertical lines
-    g_pCore->GetGraphics()->DrawLine3DQueued(CVector(posMin.fX, posMin.fY, posMin.fZ), CVector(posMin.fX, posMin.fY, posMax.fZ), fLineWidth, color);
-    g_pCore->GetGraphics()->DrawLine3DQueued(CVector(posMax.fX, posMin.fY, posMin.fZ), CVector(posMax.fX, posMin.fY, posMax.fZ), fLineWidth, color);
-    g_pCore->GetGraphics()->DrawLine3DQueued(CVector(posMax.fX, posMax.fY, posMin.fZ), CVector(posMax.fX, posMax.fY, posMax.fZ), fLineWidth, color);
-    g_pCore->GetGraphics()->DrawLine3DQueued(CVector(posMin.fX, posMax.fY, posMin.fZ), CVector(posMin.fX, posMax.fY, posMax.fZ), fLineWidth, color);
+    pGraphics->DrawLine3DQueued(CVector(posMin.fX, posMin.fY, posMin.fZ), CVector(posMin.fX, posMin.fY, posMax.fZ), fLineWidth, color);
+    pGraphics->DrawLine3DQueued(CVector(posMax.fX, posMin.fY, posMin.fZ), CVector(posMax.fX, posMin.fY, posMax.fZ), fLineWidth, color);
+    pGraphics->DrawLine3DQueued(CVector(posMax.fX, posMax.fY, posMin.fZ), CVector(posMax.fX, posMax.fY, posMax.fZ), fLineWidth, color);
+    pGraphics->DrawLine3DQueued(CVector(posMin.fX, posMax.fY, posMin.fZ), CVector(posMin.fX, posMax.fY, posMax.fZ), fLineWidth, color);
 
     // one corner
-    g_pCore->GetGraphics()->DrawLine3DQueued(CVector(posMin.fX, posMin.fY, posMin.fZ), CVector(posMin.fX, posMax.fY, posMin.fZ), fLineWidth, color);
-    g_pCore->GetGraphics()->DrawLine3DQueued(CVector(posMin.fX, posMin.fY, posMin.fZ), CVector(posMax.fX, posMin.fY, posMin.fZ), fLineWidth, color);
-    g_pCore->GetGraphics()->DrawLine3DQueued(CVector(posMin.fX, posMin.fY, posMax.fZ), CVector(posMin.fX, posMax.fY, posMax.fZ), fLineWidth, color);
-    g_pCore->GetGraphics()->DrawLine3DQueued(CVector(posMin.fX, posMin.fY, posMax.fZ), CVector(posMax.fX, posMin.fY, posMax.fZ), fLineWidth, color);
+    pGraphics->DrawLine3DQueued(CVector(posMin.fX, posMin.fY, posMin.fZ), CVector(posMin.fX, posMax.fY, posMin.fZ), fLineWidth, color);
+    pGraphics->DrawLine3DQueued(CVector(posMin.fX, posMin.fY, posMin.fZ), CVector(posMax.fX, posMin.fY, posMin.fZ), fLineWidth, color);
+    pGraphics->DrawLine3DQueued(CVector(posMin.fX, posMin.fY, posMax.fZ), CVector(posMin.fX, posMax.fY, posMax.fZ), fLineWidth, color);
+    pGraphics->DrawLine3DQueued(CVector(posMin.fX, posMin.fY, posMax.fZ), CVector(posMax.fX, posMin.fY, posMax.fZ), fLineWidth, color);
 
     // second corner
-    g_pCore->GetGraphics()->DrawLine3DQueued(CVector(posMax.fX, posMax.fY, posMin.fZ), CVector(posMin.fX, posMax.fY, posMin.fZ), fLineWidth, color);
-    g_pCore->GetGraphics()->DrawLine3DQueued(CVector(posMax.fX, posMax.fY, posMin.fZ), CVector(posMax.fX, posMin.fY, posMin.fZ), fLineWidth, color);
-    g_pCore->GetGraphics()->DrawLine3DQueued(CVector(posMax.fX, posMax.fY, posMax.fZ), CVector(posMin.fX, posMax.fY, posMax.fZ), fLineWidth, color);
-    g_pCore->GetGraphics()->DrawLine3DQueued(CVector(posMax.fX, posMax.fY, posMax.fZ), CVector(posMax.fX, posMin.fY, posMax.fZ), fLineWidth, color);
+    pGraphics->DrawLine3DQueued(CVector(posMax.fX, posMax.fY, posMin.fZ), CVector(posMin.fX, posMax.fY, posMin.fZ), fLineWidth, color);
+    pGraphics->DrawLine3DQueued(CVector(posMax.fX, posMax.fY, posMin.fZ), CVector(posMax.fX, posMin.fY, posMin.fZ), fLineWidth, color);
+    pGraphics->DrawLine3DQueued(CVector(posMax.fX, posMax.fY, posMax.fZ), CVector(posMin.fX, posMax.fY, posMax.fZ), fLineWidth, color);
+    pGraphics->DrawLine3DQueued(CVector(posMax.fX, posMax.fY, posMax.fZ), CVector(posMax.fX, posMin.fY, posMax.fZ), fLineWidth, color);
 
 
-    g_pCore->GetGraphics()->DrawWiredSphere(colModel->m_sphere.m_center + vecPosition, colModel->m_sphere.m_radius, SColorARGB(255, 0, 0, 255),
+    pGraphics->DrawWiredSphere(colModel->m_sphere.m_center + vecPosition, colModel->m_sphere.m_radius, SColorARGB(255, 0, 0, 255),
                                             fLineWidth, 2);
 }
 
-bool CCustomCollision::RemoveCustomCollision(CEntity* pEntity)
+bool CCustomCollision::RemoveCustomCollision(CObject* pObject)
 {
-    DWORD dwRef = (DWORD)pEntity;
+    DWORD dwRef = (DWORD)pObject;
     if (m_mapCustomCollisions.find(dwRef) != m_mapCustomCollisions.end())
     {
         //delete m_mapCustomCollisions[dwRef];
@@ -289,9 +289,9 @@ bool CCustomCollision::SetObjectScaledCollision(CObject* pObject, CColModel* pCo
     return true;
 }
 
-bool CCustomCollision::HasCustomCollision(CEntity* pEntity)
+bool CCustomCollision::HasCustomCollision(CObject* pObject)
 {
-    DWORD dwRef = (DWORD)pEntity;
+    DWORD dwRef = (DWORD)pObject;
     if (m_mapCustomCollisions.find(dwRef) != m_mapCustomCollisions.end())
         return true;
 

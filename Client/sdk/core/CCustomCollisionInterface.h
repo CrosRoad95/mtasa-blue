@@ -18,9 +18,9 @@ class CCustomCollisionInterface
 public:
     virtual CColModel*                  GetCurrentCollision(CObject* pObject, bool bSkipScaled = false) = 0;
     virtual void                        SetObjectScale(CObject* pObject, CVector scale) = 0;
-    virtual bool                        SetObjectCollision(CColModel* pEntitySA, CColModel* pColModelSA) = 0;
-    virtual bool                        SetObjectScaledCollision(CColModel* pEntitySA, CColModel* pColModelSA) = 0;
-    virtual bool                        HasCustomCollision(CColModel* pEntitySA) = 0;
-    virtual bool                        RemoveCustomCollision(CColModel* pEntitySA) = 0;
+    virtual bool                        SetObjectCollision(CObject* pObject, CColModel* pColModelSA) = 0;
+    virtual bool                        SetObjectScaledCollision(CObject* pObject, CColModel* pColModelSA) = 0;
+    virtual bool                        HasCustomCollision(CObject* pObject) = 0;
+    virtual bool                        RemoveCustomCollision(CObject* pObject) = 0;
     virtual void                        DrawCollisionDebug(CObject* pObject) = 0;
 };
